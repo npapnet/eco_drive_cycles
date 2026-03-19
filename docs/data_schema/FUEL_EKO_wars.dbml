@@ -1,0 +1,77 @@
+Project Fuel_EKO_Wars {
+  database_type: 'PostgreSQL'
+  Note: 'Complete relational database schema integrating telematics edge data, user gamification, and research datasets.'
+}
+
+Table users {
+  id integer [primary key, increment]
+  email varchar [unique, not null]
+  status varchar [note: 'Account status, e.g., active, suspended']
+  created_at timestamp [default: `now()`]
+}
+
+Table vehicles {
+  id integer [primary key, increment]
+  user_id integer [ref: > users.id, note: 'One-to-many: A user can own multiple vehicles']
+  wltp_benchmark decimal [note: 'Derived from specs_nedc_wltp for atomic data integrity']
+  weight_kg decimal [note: 'Derived from weight_hp']
+  horsepower integer [note: 'Derived from weight_hp']
+}
+
+Table obd_devices {
+  id integer [primary key, increment]
+  vehicle_id integer [ref: - vehicles.id, unique, note: 'One-to-one: Each vehicle is paired with one specific OBD device']
+  mac_address varchar [unique]
+  pairing_date timestamp
+}
+
+Table refuel_logs {
+  id integer [primary key, increment]
+  user_id integer [ref: > users.id, note: 'One-to-many: Users record multiple refueling events']
+  volume_liters decimal
+  fuel_brand varchar
+  logged_at timestamp
+}
+
+Table trips {
+  id integer [primary key, increment]
+  vehicle_id integer [ref: > vehicles.id, note: 'One-to-many: Vehicles generate multiple trips']
+  start_time timestamp
+  end_time timestamp
+  distance_km decimal
+  
+  // Basic Statistical Fingerprinting
+  avg_velocity_kmh decimal [note: 'Mean velocity computed over the entire trip duration']
+  max_velocity_kmh decimal [note: 'Peak velocity recorded during the trip']
+  avg_acceleration_ms2 decimal [note: 'Mean positive acceleration; primary indicator of driving aggression']
+  max_deceleration_ms2 decimal [note: 'Peak negative acceleration; indicates hard braking events']
+  idle_time_pct decimal [note: 'Percentage of total trip duration where speed is 0 but engine RPM > 0']
+  estimated_fuel_liters decimal [note: 'Total fuel consumed, calculated via OBD Mass Air Flow (MAF) or direct fuel rate PIDs']
+  
+  // Advanced Algorithmic Fingerprinting & URI Pointers
+  wavelet_anomaly_count integer [note: 'Aggregate count of high-frequency aggressive driving spikes detected via Discrete Wavelet Transform (DWT)']
+  markov_matrix_uri varchar [note: 'Pointer to external BLOB storage containing the 2D Speed-Acceleration probability density matrix']
+  pla_trajectory_uri varchar [note: 'Pointer to external BLOB storage containing the Ramer-Douglas-Peucker compressed time-series']
+}
+Table eco_scores {
+  id integer [primary key, increment]
+  trip_id integer [ref: - trips.id, note: 'One-to-one: Each trip produces one specific score']
+  user_id integer [ref: > users.id, note: 'Denormalized for rapid leaderboard querying']
+  index_value float
+  ranking_tier varchar [note: 'e.g., Bronze, Silver, Gold']
+}
+
+Table rewards {
+  id integer [primary key, increment]
+  user_id integer [ref: > users.id, note: 'Corrected relationship: Rewards are issued to users, not individual trips']
+  eco_score_id integer [ref: > eco_scores.id, note: 'Optional link to the specific score that unlocked the reward']
+  partner_id varchar
+  voucher_code varchar [unique]
+}
+
+Table research_cycles {
+  id integer [primary key, increment]
+  trip_id integer [ref: > trips.id, note: 'One-to-many: A trip may contribute to multiple research cycle classifications']
+  cycle_type varchar [note: 'e.g., Urban, Extra-Urban']
+  anonymized_matrix_ref varchar [note: 'URI to the Markov binning matrix payload']
+}
