@@ -1,0 +1,45 @@
+
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[od]
+*$py.class
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IDEs
+.idea/
+.vscode/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Type checking
+.mypy_cache/
+.pyre/
+
+# Packaging
+build/
+dist/
+*.egg-info/
+*.egg
+
+
+# Ignore all data files
+
+_data/*.zip
+_data/complete_extract/
+*.pyc
+_data/latin_characters_data.7z
