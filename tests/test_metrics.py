@@ -1,7 +1,7 @@
 import pytest
 import pandas as pd
 import numpy as np
-from eco_drive_cycles.metrics import (
+from drive_cycle_calculator.metrics import (
     compute_average_speed,
     compute_average_speed_without_stops,
     compute_maximum_speed,
@@ -13,6 +13,7 @@ from eco_drive_cycles.metrics import (
     compute_engine_load,
     compute_fuel_consumption,
     compute_co2_emissions,
+    compute_speed_profile,
 )
 
 
@@ -218,3 +219,43 @@ class TestComputeCo2Emissions:
         sheets = {"2025-05-14_Morning": pd.DataFrame({"CO₂ in g/km (Average)(g/km)": [120.0, 140.0]})}
         result = compute_co2_emissions(sheets)
         assert result["2025-05-14"]["Morning"] == pytest.approx(130.0)
+
+
+# ────────────────────────────────────────────────────────────────
+# compute_speed_profile
+# ────────────────────────────────────────────────────────────────
+
+def _speed_profile_sheet(smooth_col_name: str, n: int = 8) -> pd.DataFrame:
+    """Minimal DataFrame suitable for compute_speed_profile."""
+    return pd.DataFrame({
+        "Ταχ m/s": [3.0] * n,
+        "Διάρκεια (sec)": list(range(n)),
+        smooth_col_name: [30.0] * n,
+    })
+
+
+class TestComputeSpeedProfile:
+    def test_no_accent_variant_column(self):
+        """Column name without accent mark is found and returned correctly."""
+        sheets = {"2025-05-14_Morning": _speed_profile_sheet("Εξομαλυνση")}
+        name, x, y = compute_speed_profile(sheets)
+        assert name == "2025-05-14_Morning"
+        assert len(x) == len(y)
+        assert list(y) == pytest.approx([30.0] * len(y))
+
+    def test_accent_variant_column(self):
+        """Column name WITH accent mark is found as fallback."""
+        sheets = {"2025-05-14_Morning": _speed_profile_sheet("Εξομάλυνση")}
+        name, x, y = compute_speed_profile(sheets)
+        assert name == "2025-05-14_Morning"
+        assert len(y) > 0
+
+    def test_missing_smooth_column_raises(self):
+        """RuntimeError raised when neither accent variant exists."""
+        df = pd.DataFrame({
+            "Ταχ m/s": [3.0] * 5,
+            "Διάρκεια (sec)": list(range(5)),
+            "WrongColumn": [1.0] * 5,
+        })
+        with pytest.raises(RuntimeError, match="not found"):
+            compute_speed_profile({"2025-05-14_Morning": df})

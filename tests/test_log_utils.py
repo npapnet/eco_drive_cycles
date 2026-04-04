@@ -1,7 +1,7 @@
 import os
 import time
 import pytest
-from eco_drive_cycles.log_utils import find_latest_log
+from drive_cycle_calculator.log_utils import find_latest_log
 
 
 class TestFindLatestLog:

@@ -12,7 +12,6 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-
 # ────────────────────────────────────────────────────────────────
 # Internal helper
 # ────────────────────────────────────────────────────────────────
@@ -295,7 +294,10 @@ def compute_speed_profile(
         if col is None:
             return dict(mean=np.nan, stop_pct=np.nan)
         speed_kmh = pd.to_numeric(col, errors="coerce").dropna() * 3.6
-        return dict(mean=float(speed_kmh.mean()), stop_pct=float(speed_kmh.le(stop_threshold_kmh).mean()))
+        return dict(
+            mean=float(speed_kmh.mean()),
+            stop_pct=float(speed_kmh.le(stop_threshold_kmh).mean()),
+        )
 
     def _sim(a: float, b: float) -> float:
         if np.isnan(a) or np.isnan(b):

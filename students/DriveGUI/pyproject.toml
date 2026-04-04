@@ -3,9 +3,13 @@ name = "drivegui"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
-    "jupyter>=1.1.1",
     "matplotlib>=3.10.8",
     "numpy",
     "openpyxl>=3.1.5",
     "pandas>=3.0.2",
+]
+
+[dependency-groups]
+dev = [
+    "jupyter>=1.1.1",
 ]

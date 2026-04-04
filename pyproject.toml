@@ -10,3 +10,19 @@ members = [
     "src",
 ]
 
+[dependency-groups]
+dev = ["ruff>=0.9"]
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    "ignore::UserWarning",
+    "ignore::RuntimeWarning",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+

@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
 import pandas as pd
-from eco_drive_cycles.metrics import (
+from drive_cycle_calculator.metrics import (
     similarity,
     compute_session_metrics,
     find_representative_sheet,

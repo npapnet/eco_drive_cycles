@@ -193,7 +193,8 @@ def run_calculations(folder_path: str, log_folder: str = "log") -> tuple[str, st
 
             # Write a short note for the text log -------------------------
             text_lines.append(
-                f"{file_name}: {smooth_speed.count()} speed records -> {acceleration.count()} accel values"
+                f"{file_name}: {smooth_speed.count()} speed records"
+                f" -> {acceleration.count()} accel values"
             )
 
         # If nothing was written create a single sheet so the workbook is valid

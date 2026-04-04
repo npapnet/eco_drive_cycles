@@ -42,19 +42,43 @@ This silently produces wrong results for all-stop sessions (all legitimate km/h 
 
 ---
 
+## P1 — Remove os.chdir() from short_excel.py before any src/ migration
+
+**What:** `short_excel.process_files()` calls `os.chdir(folder)` as a side effect. This is
+a session-global mutation that silently corrupts the working directory for any code that
+runs after it. It works for the current GUI-only flow, but is incompatible with a
+pip-installable library — any library caller would have their cwd silently changed.
+
+**Why:** Library blocker. `short_excel.py` must NOT be migrated to `src/drive_cycle_calculator/`
+until this is removed. The fix is to return the folder path and let callers use it, or
+to rewrite `process_files()` to accept an explicit folder argument instead of calling
+`os.chdir()`. Downstream callers (`driving_cycles_calculatorV1.py:82`) pass the result to
+`run_calculations(os.getcwd())` — once `os.chdir` is removed, this needs to become
+`run_calculations(folder_path)`.
+
+**Where:** `students/DriveGUI/short_excel.py:46` — `process_files()` function.
+
+**Effort:** S (human: ~2 hrs / CC: ~10 min)
+
+**Depends on:** Nothing. Can be done independently before src/ restructure.
+
+---
+
 ## P2 — Deduplicate similarity scoring in speed_profile.py
 
-**What:** `speed_profile.py` contains `_choose_representative_sheet()`, which reimplements
-the same representative-route selection algorithm as `metrics.find_representative_sheet()`.
-After the calc/presentation split lands, make `speed_profile.py` call
-`metrics.find_representative_sheet()` instead and delete the local copy.
+**What:** `compute_speed_profile()` in `metrics.py` uses its own inline 2-metric selection
+(mean speed + stop %) to pick the representative session for the Speed Profile tab.
+`find_representative_sheet()` uses 7 metrics. They can return different sessions.
 
-**Why:** Two divergent implementations of the same algorithm will silently produce different
-results over time as one gets fixed/tuned and the other doesn't.
+**Why:** **Scientific correctness issue.** The GUI can simultaneously claim Session A is the
+representative route (Representative Route tab, 7-metric scoring) and display Session B's
+speed profile (Speed Profile tab, 2-metric scoring). A researcher exporting these results
+would get inconsistent data without any warning. Make `compute_speed_profile()` call
+`find_representative_sheet()` and remove the inline `_metrics()`/`_sim()` closures.
 
-**Where:** `students/DriveGUI/speed_profile.py` — look for `_choose_representative_sheet`.
+**Where:** `students/DriveGUI/metrics.py:272` — `compute_speed_profile()` function.
 
 **Effort:** S (human: ~1 hr / CC: ~5 min)
 
-**Depends on:** calc/presentation split (metrics.py extraction) must land first.
+**Depends on:** calc/presentation split (metrics.py extraction) must land first. ✓ Done.
 
