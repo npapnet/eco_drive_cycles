@@ -42,25 +42,12 @@ This silently produces wrong results for all-stop sessions (all legitimate km/h 
 
 ---
 
-## P1 — Remove os.chdir() from short_excel.py before any src/ migration
+## ~~P1 — Remove os.chdir() from short_excel.py before any src/ migration~~ ✓ DONE
 
-**What:** `short_excel.process_files()` calls `os.chdir(folder)` as a side effect. This is
-a session-global mutation that silently corrupts the working directory for any code that
-runs after it. It works for the current GUI-only flow, but is incompatible with a
-pip-installable library — any library caller would have their cwd silently changed.
-
-**Why:** Library blocker. `short_excel.py` must NOT be migrated to `src/drive_cycle_calculator/`
-until this is removed. The fix is to return the folder path and let callers use it, or
-to rewrite `process_files()` to accept an explicit folder argument instead of calling
-`os.chdir()`. Downstream callers (`driving_cycles_calculatorV1.py:82`) pass the result to
-`run_calculations(os.getcwd())` — once `os.chdir` is removed, this needs to become
-`run_calculations(folder_path)`.
-
-**Where:** `students/DriveGUI/short_excel.py:46` — `process_files()` function.
-
-**Effort:** S (human: ~2 hrs / CC: ~10 min)
-
-**Depends on:** Nothing. Can be done independently before src/ restructure.
+`os.chdir(folder)` removed from both `short_excel.process_files()` and the GUI's own
+`process_files()`. Both now use `os.path.join(folder, "*.xlsx")` for glob and return/store
+the folder explicitly. `run_calculations()` and `plot_all_and_save()` receive the folder
+directly — no more reliance on CWD side-effects.
 
 ---
 

@@ -9,14 +9,15 @@
 # Note:  Every class / function name is identical to the old file, so
 #        nothing else in your project needs to change.
 
-import os
 import glob
+import os
 import re
 from collections import OrderedDict
 from datetime import datetime
+from tkinter import filedialog
 
 import pandas as pd
-from tkinter import filedialog
+
 
 # ────────────────────────────────────────────────────────────────
 # 1. Small helper class – one day’s worth of filenames
@@ -51,22 +52,24 @@ class Day:
 # ────────────────────────────────────────────────────────────────
 # 2. Main routine – unchanged signature
 # ────────────────────────────────────────────────────────────────
-def process_files() -> list[Day]:
+def process_files() -> tuple[str, list[Day]]:
     """
-    Open a folder-picker, scan every *.xlsx* file, and return a
-    list of **Day** objects sorted by date.
+    Open a folder-picker, scan every *.xlsx* file, and return
+    ``(folder_path, days)`` where *days* is a list of **Day** objects
+    sorted by date.
+
+    The folder path is returned explicitly so callers can pass it to
+    ``run_calculations()`` without relying on ``os.getcwd()``.
     """
     # 2️⃣.1  Pick folder
     folder = filedialog.askdirectory(title="Select Folder Containing Excel Files")
     if not folder:                       # user cancelled
-        return []
-
-    os.chdir(folder)
+        return "", []
 
     # 2️⃣.2  Build (filename, datetime) pairs
     file_times: list[tuple[str, datetime]] = []
 
-    for fname in glob.glob("*.xlsx"):
+    for fname in glob.glob(os.path.join(folder, "*.xlsx")):
         # Read only cell A2 (row-1, col-0) – contains timestamp string
         try:
             date_cell = str(pd.read_excel(fname, header=None).iloc[1, 0])
@@ -104,14 +107,14 @@ def process_files() -> list[Day]:
             print(f"Day {day_idx} – {session}: {fname} ({dt.strftime('%Y-%m-%d %H:%M:%S')})")
         days.append(day_obj)
 
-    return days
+    return folder, days
 
 
 # ────────────────────────────────────────────────────────────────
 # 3. Quick manual test
 # ────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    result = process_files()
+    _folder, result = process_files()
     print("\nSummary:")
     for d in result:
         print(d)

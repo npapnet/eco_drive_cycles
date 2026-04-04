@@ -8,35 +8,38 @@ import glob
 import os
 import re
 import sys
+import tkinter as tk
 from collections import OrderedDict
 from datetime import datetime
+from tkinter import filedialog, messagebox
 from types import FunctionType
 from typing import Dict
 
 import matplotlib
 import matplotlib.pyplot as plt
 import pandas as pd
-import tkinter as tk
-from tkinter import filedialog, messagebox
+from average_acceleration import show_average_acceleration
+from average_deceleration import show_average_deceleration
 
 # ────────────────────────────────────────────────────────────────
 # 1.  Import chart / table generators
 # ────────────────────────────────────────────────────────────────
 from average_speed import show_average_speed
 from average_speed_without_stops import show_average_speed_without_stops
-from maximum_speed import show_maximum_speed
-from average_acceleration import show_average_acceleration
-from average_deceleration import show_average_deceleration
-from stop_percentage import show_stop_percentage
-from number_of_stops import show_number_of_stops
-from total_stop_percentage import show_total_stop_percentage
+from calculations import run_calculations
+from co2_chart import show_co2_emissions
 from engine_load import show_engine_load
 from fuel_consumption_chart import show_fuel_consumption
-from co2_chart import show_co2_emissions
+from maximum_speed import show_maximum_speed
+from number_of_stops import show_number_of_stops
 from representative_route import show_representative_route
 from speed_profile import show_representative_speed_profile
+from stop_percentage import show_stop_percentage
+from total_stop_percentage import show_total_stop_percentage
 
-from calculations import run_calculations
+# Folder selected by the user; set in process_files(), read in run_and_log()
+# and plot_all_and_save().  Avoids os.chdir() side-effects.
+_selected_folder: str | None = None
 
 metrics_functions: Dict[str, FunctionType] = {
     "Average Speed": show_average_speed,
@@ -76,14 +79,15 @@ class Day:
 # 3.  Process user folder
 # ────────────────────────────────────────────────────────────────
 def process_files():
+    global _selected_folder
     folder = filedialog.askdirectory(title="Select Folder with Excel Files")
     if not folder:
         return
-    os.chdir(folder)
+    _selected_folder = folder
     terminal.insert(tk.END, f"Folder: {folder}\n")
 
     rows: list[tuple[str, datetime]] = []
-    for fname in glob.glob("*.xlsx"):
+    for fname in glob.glob(os.path.join(folder, "*.xlsx")):
         try:
             date_cell = str(pd.read_excel(fname, header=None).iloc[1, 0])
             date_clean = re.sub(r"GMT|\\s*\\+\\d\\d:\\d\\d", "", date_cell).strip()
@@ -118,7 +122,7 @@ def _open_folder(path: str):
 
 
 def plot_all_and_save():
-    out_dir = os.path.join(os.getcwd(), "PLOT")
+    out_dir = os.path.join(_selected_folder or os.getcwd(), "PLOT")
     os.makedirs(out_dir, exist_ok=True)
     terminal.insert(tk.END, f"[PLOT ALL] Export → {out_dir}\n")
 
@@ -210,7 +214,7 @@ tk.Button(
 
 
 def run_and_log():
-    txt, xlsx = run_calculations(os.getcwd())
+    txt, xlsx = run_calculations(_selected_folder or os.getcwd())
     terminal.insert(tk.END, f"Text log : {txt}\nExcel log: {xlsx}\n")
     charts_btn["state"] = tk.NORMAL
 
