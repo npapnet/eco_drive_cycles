@@ -5,35 +5,17 @@
 # και παράγει ομαδοποιημένο ραβδόγραμμα (grouped-bar chart).
 
 import os
-import glob
 import pandas as pd          # Excel → DataFrame
 import numpy as np           # small numeric helper
 import matplotlib.pyplot as plt
 from datetime import datetime
 
-# ────────────────────────────────────────────────────────────────
-# 1. Helper – locate the newest calculations_log_*.xlsx
-# ────────────────────────────────────────────────────────────────
-def _find_latest_log(log_dir: str) -> str:
-    """
-    Return the **most recently modified** Excel workbook whose filename
-        matches  calculations_log_YYYYMMDD_HHMMSS.xlsx
-    inside *log_dir*.
-
-    Raises
-    ------
-    FileNotFoundError
-        If no such log exists in *log_dir*.
-    """
-    pattern = os.path.join(log_dir, "calculations_log_*.xlsx")
-    files = glob.glob(pattern)
-    if not files:                       # nothing found → bail out
-        raise FileNotFoundError(f"No log files found in {log_dir}")
-    return max(files, key=os.path.getmtime)
+from log_utils import find_latest_log
+from metrics import compute_average_speed
 
 
 # ────────────────────────────────────────────────────────────────
-# 2. Main public function – API unchanged
+# Main public function – API unchanged
 # ────────────────────────────────────────────────────────────────
 def show_average_speed(log_excel_path: str | None = None) -> None:
     """
@@ -45,36 +27,22 @@ def show_average_speed(log_excel_path: str | None = None) -> None:
     • If *log_excel_path* is **None**, the newest workbook found in
       `<script folder>/INPUT/log/` is opened automatically.
     """
-    # 2️⃣.1 Decide which workbook to load
+    # Decide which workbook to load
     if log_excel_path is None:
         here = os.path.dirname(os.path.abspath(__file__))
         log_dir = os.path.join(here, "INPUT", "log")
-        log_excel_path = _find_latest_log(log_dir)
+        log_excel_path = find_latest_log(log_dir)
 
-    # 2️⃣.2 Read every worksheet into a dict {sheet_name: DataFrame}
+    # Read every worksheet into a dict {sheet_name: DataFrame}
     sheets = pd.read_excel(log_excel_path, sheet_name=None)
 
-    # 2️⃣.3 Compute mean speed per date & session
-    #       Result → { '2025-05-14': {'Morning': 34.2, 'Evening': 31.8}, … }
-    means: dict[str, dict[str, float]] = {}
-    target_col = "Ταχ m/s"             # Greek header: “Speed (m/s)”
-
-    for sheet_name, df in sheets.items():
-        if target_col not in df.columns:
-            continue  # skip irrelevant sheets
-
-        # ➡️ Clean numeric column, drop NaNs
-        speed_ms = pd.to_numeric(df[target_col], errors="coerce").dropna()
-        mean_kmh = float(speed_ms.mean() * 3.6) if not speed_ms.empty else 0.0
-
-        # ➡️ Sheet names look like 'YYYY-MM-DD_Morning'
-        date_str, session = (sheet_name.split("_", 1) + ["Unknown"])[:2]
-        means.setdefault(date_str, {})[session] = mean_kmh
+    # Compute mean speed per date & session
+    means = compute_average_speed(sheets)
 
     if not means:
-        raise ValueError(f"No sheets contained a '{target_col}' column.")
+        raise ValueError("No sheets contained a 'Ταχ m/s' column.")
 
-    # 2️⃣.4 Prepare arrays for plotting
+    # Prepare arrays for plotting
     dates = sorted(means.keys(), key=lambda d: datetime.fromisoformat(d))
     morning = [means[d].get("Morning", 0.0) for d in dates]
     evening = [means[d].get("Evening", 0.0) for d in dates]

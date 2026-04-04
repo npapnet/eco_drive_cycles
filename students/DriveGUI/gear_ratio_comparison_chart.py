@@ -64,7 +64,7 @@ def show_gear_ratio_comparison(log_excel_path: str | None = None) -> None:
         "Morning": pd.Series(dtype=int),
         "Evening": pd.Series(dtype=int)
     }
-    target_col = "Ταχύτητες στο κιβώτιο"      # “Gears in gearbox”
+    target_col = "Ταχύτητες στο κιβώτιο"      # "Gears in gearbox"
 
     for sheet_name, df in sheets.items():
         # Extract session from sheet name: 'YYYY-MM-DD_Morning'

@@ -3,7 +3,7 @@
 # 1️⃣  Ask the user to pick a folder full of *.xlsx* logger files.
 # 2️⃣  Read cell A2 of each workbook to get the recording timestamp.
 # 3️⃣  Sort the files chronologically.
-# 4️⃣  Group them by calendar day and label “Morning” or “Evening”.
+# 4️⃣  Group them by calendar day and label "Morning" or "Evening".
 # 5️⃣  Build Day objects so other scripts can use the result.
 #
 # Note:  Every class / function name is identical to the old file, so
@@ -74,7 +74,7 @@ def process_files() -> list[Day]:
             print(f"{fname}: ERROR reading date ({err})")
             continue
 
-        # Clean “Mon Sep 16 18:45:50 GMT+03:00 2019” → “Mon Sep 16 18:45:50 +0300 2019”
+        # Clean "Mon Sep 16 18:45:50 GMT+03:00 2019" → "Mon Sep 16 18:45:50 +0300 2019"
         date_cell = date_cell.replace("GMT", "")
         date_cell = re.sub(r"(\+\d\d):(\d\d)", r"\1\2", date_cell)
 

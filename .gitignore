@@ -43,3 +43,6 @@ _data/*.zip
 _data/complete_extract/
 *.pyc
 _data/latin_characters_data.7z
+
+# Generated calculation logs
+students/DriveGUI/INPUT/log/

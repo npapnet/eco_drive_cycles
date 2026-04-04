@@ -8,9 +8,13 @@ created so the user can see what happened.
 
 Functions
 ---------
-_gps_to_duration_seconds(gps_series)
+gps_to_duration_seconds(gps_series)
     Convert a *GPS Time* column to seconds elapsed from the first valid
     record.
+
+smooth_and_derive(speed_kmh)
+    Apply rolling smoothing and derive acceleration columns from a raw
+    speed series.
 
 run_calculations(folder_path: str, log_folder: str = "log") -> tuple[str, str]
     Process all spreadsheets in *folder_path* and save an **Excel** log
@@ -32,7 +36,7 @@ import pandas as pd
 # Helper
 # ---------------------------------------------------------------------------
 
-def _gps_to_duration_seconds(gps_series: pd.Series) -> pd.Series:
+def gps_to_duration_seconds(gps_series: pd.Series) -> pd.Series:
     """Return *GPS Time* expressed as seconds from start.
 
     The column coming from the logger is not always the same: sometimes
@@ -57,6 +61,37 @@ def _gps_to_duration_seconds(gps_series: pd.Series) -> pd.Series:
 
     # 3) Give up – return an all‑NaN column so the caller can go on -------
     return pd.Series([np.nan] * len(gps_series), index=gps_series.index)
+
+
+def smooth_and_derive(speed_kmh: pd.Series) -> dict:
+    """Apply rolling smoothing and derive acceleration columns.
+
+    Parameters
+    ----------
+    speed_kmh : pd.Series
+        Raw speed values in km/h.
+
+    Returns
+    -------
+    dict with keys:
+        "smooth_speed" – rolling mean (window=4, center=True, min_periods=4), km/h
+        "speed_ms"     – smooth_speed / 3.6, m/s
+        "acceleration" – speed_ms.diff(), m/s²
+        "pos_acc"      – acceleration where > 0 (NaN elsewhere)
+        "neg_acc"      – acceleration where < 0 (NaN elsewhere)
+    """
+    smooth_speed = speed_kmh.rolling(window=4, center=True, min_periods=4).mean()
+    speed_ms = smooth_speed / 3.6
+    acceleration = speed_ms.diff()
+    pos_acc = acceleration.where(acceleration > 0)
+    neg_acc = acceleration.where(acceleration < 0)
+    return dict(
+        smooth_speed=smooth_speed,
+        speed_ms=speed_ms,
+        acceleration=acceleration,
+        pos_acc=pos_acc,
+        neg_acc=neg_acc,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -130,14 +165,15 @@ def run_calculations(folder_path: str, log_folder: str = "log") -> tuple[str, st
             # ------------------------------------------------------------------
             # Calculations
             # ------------------------------------------------------------------
-            duration = _gps_to_duration_seconds(df["GPS Time"])
+            duration = gps_to_duration_seconds(df["GPS Time"])
             speed_kmh = pd.to_numeric(df["Speed (OBD)(km/h)"], errors="coerce")
 
-            smooth_speed = speed_kmh.rolling(window=4, center=True, min_periods=4).mean()
-            speed_ms = smooth_speed / 3.6  # km/h -> m/s
-            acceleration = speed_ms.diff()
-            pos_acc = acceleration.where(acceleration > 0)
-            neg_acc = acceleration.where(acceleration < 0)
+            derived = smooth_and_derive(speed_kmh)
+            smooth_speed = derived["smooth_speed"]
+            speed_ms = derived["speed_ms"]
+            acceleration = derived["acceleration"]
+            pos_acc = derived["pos_acc"]
+            neg_acc = derived["neg_acc"]
 
             # Collect everything in a new DataFrame -----------------------
             processed = OrderedDict([
