@@ -12,7 +12,7 @@ import pandas as pd          # Excel → DataFrame
 import numpy as np           # Small numeric helper
 import matplotlib.pyplot as plt
 
-from log_utils import find_latest_log
+from log_utils import find_latest_log, get_log_dir
 from metrics import compute_average_deceleration
 
 
@@ -30,9 +30,7 @@ def show_average_deceleration(log_excel_path: str | None = None) -> None:
         • otherwise → use the file path supplied by the caller.
     """
     if log_excel_path is None:
-        here = os.path.dirname(os.path.abspath(__file__))
-        log_dir = os.path.join(here, "INPUT", "log")
-        log_excel_path = find_latest_log(log_dir)
+        log_excel_path = find_latest_log(get_log_dir())
 
     sheets = pd.read_excel(log_excel_path, sheet_name=None)
     means = compute_average_deceleration(sheets)

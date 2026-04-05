@@ -27,6 +27,7 @@ from average_deceleration import show_average_deceleration
 from average_speed import show_average_speed
 from average_speed_without_stops import show_average_speed_without_stops
 from calculations import run_calculations
+from log_utils import set_active_log_dir
 from co2_chart import show_co2_emissions
 from engine_load import show_engine_load
 from fuel_consumption_chart import show_fuel_consumption
@@ -214,7 +215,10 @@ tk.Button(
 
 
 def run_and_log():
-    txt, xlsx = run_calculations(_selected_folder or os.getcwd())
+    folder = _selected_folder or os.getcwd()
+    log_dir = os.path.join(folder, "log")
+    set_active_log_dir(log_dir)
+    txt, xlsx = run_calculations(folder, log_folder=log_dir)
     terminal.insert(tk.END, f"Text log : {txt}\nExcel log: {xlsx}\n")
     charts_btn["state"] = tk.NORMAL
 

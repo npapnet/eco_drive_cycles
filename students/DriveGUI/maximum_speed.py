@@ -10,7 +10,7 @@ import pandas as pd          # Excel → DataFrame
 import numpy as np           # Numeric helper
 import matplotlib.pyplot as plt  # Plotting
 
-from log_utils import find_latest_log
+from log_utils import find_latest_log, get_log_dir
 from metrics import compute_maximum_speed
 
 
@@ -28,9 +28,7 @@ def show_maximum_speed(log_excel_path: str | None = None) -> None:
         • otherwise → use the given file path.
     """
     if log_excel_path is None:
-        here = os.path.dirname(os.path.abspath(__file__))
-        log_dir = os.path.join(here, "INPUT", "log")
-        log_excel_path = find_latest_log(log_dir)
+        log_excel_path = find_latest_log(get_log_dir())
 
     sheets = pd.read_excel(log_excel_path, sheet_name=None)
     maxima = compute_maximum_speed(sheets)

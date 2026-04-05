@@ -11,7 +11,7 @@ import numpy as np          # For simple maths
 import pandas as pd         # For reading Excel
 import matplotlib.pyplot as plt  # For plotting
 
-from log_utils import find_latest_log
+from log_utils import find_latest_log, get_log_dir
 from metrics import compute_engine_load
 
 
@@ -29,9 +29,7 @@ def show_engine_load(log_excel_path: str | None = None) -> None:
           `<this script>/INPUT/log/` is selected automatically.
     """
     if log_excel_path is None:
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        log_dir = os.path.join(base_dir, "INPUT", "log")
-        log_excel_path = find_latest_log(log_dir)
+        log_excel_path = find_latest_log(get_log_dir())
 
     work_sheets = pd.read_excel(log_excel_path, sheet_name=None)
     loads_by_date = compute_engine_load(work_sheets)

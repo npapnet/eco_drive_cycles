@@ -5,32 +5,13 @@
 # calculations log Excel workbook.
 
 import os
-import glob
 from datetime import datetime
 
 import pandas as pd          # Excel ↔ DataFrame
 import matplotlib.pyplot as plt
 import numpy as np
 
-
-# ──────────────────────────────────────────────────────────────────
-# Helper – locate the newest log workbook
-# ──────────────────────────────────────────────────────────────────
-def _find_latest_log(log_dir: str) -> str:
-    """
-    Return the full path of the **most-recently modified**
-    `calculations_log_YYYYMMDD_HHMMSS.xlsx` found inside *log_dir*.
-
-    Raises
-    ------
-    FileNotFoundError
-        If no such file exists in *log_dir*.
-    """
-    pattern = os.path.join(log_dir, "calculations_log_*.xlsx")
-    files = glob.glob(pattern)
-    if not files:                            # nothing found
-        raise FileNotFoundError(f"No log files in {log_dir}")
-    return max(files, key=os.path.getmtime)
+from log_utils import find_latest_log, get_log_dir
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -52,9 +33,7 @@ def show_gear_ratio_comparison(log_excel_path: str | None = None) -> None:
     """
     # 1️⃣ decide which workbook to open
     if log_excel_path is None:
-        here = os.path.dirname(os.path.abspath(__file__))
-        log_dir = os.path.join(here, "INPUT", "log")
-        log_excel_path = _find_latest_log(log_dir)
+        log_excel_path = find_latest_log(get_log_dir())
 
     # 2️⃣ read every worksheet into a dict {sheet_name: DataFrame}
     sheets = pd.read_excel(log_excel_path, sheet_name=None)

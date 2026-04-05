@@ -10,7 +10,7 @@ import numpy as np           # small numeric helper
 import matplotlib.pyplot as plt
 from datetime import datetime
 
-from log_utils import find_latest_log
+from log_utils import find_latest_log, get_log_dir
 from metrics import compute_average_speed
 
 
@@ -29,9 +29,7 @@ def show_average_speed(log_excel_path: str | None = None) -> None:
     """
     # Decide which workbook to load
     if log_excel_path is None:
-        here = os.path.dirname(os.path.abspath(__file__))
-        log_dir = os.path.join(here, "INPUT", "log")
-        log_excel_path = find_latest_log(log_dir)
+        log_excel_path = find_latest_log(get_log_dir())
 
     # Read every worksheet into a dict {sheet_name: DataFrame}
     sheets = pd.read_excel(log_excel_path, sheet_name=None)

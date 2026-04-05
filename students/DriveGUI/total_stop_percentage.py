@@ -8,7 +8,7 @@ import os
 import pandas as pd           # Excel → DataFrame
 import matplotlib.pyplot as plt
 
-from log_utils import find_latest_log
+from log_utils import find_latest_log, get_log_dir
 from metrics import compute_total_stop_percentage
 
 
@@ -34,9 +34,7 @@ def show_total_stop_percentage(
         Speeds ≤ this value count as "stop".
     """
     if log_excel_path is None:
-        here = os.path.dirname(os.path.abspath(__file__))
-        log_dir = os.path.join(here, "INPUT", "log")
-        log_excel_path = find_latest_log(log_dir)
+        log_excel_path = find_latest_log(get_log_dir())
 
     sheets = pd.read_excel(log_excel_path, sheet_name=None)
     pct_stop, pct_move = compute_total_stop_percentage(sheets, stop_threshold_kmh)

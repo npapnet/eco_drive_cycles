@@ -19,7 +19,7 @@ import os
 import matplotlib.pyplot as plt
 import pandas as pd
 
-from log_utils import find_latest_log
+from log_utils import find_latest_log, get_log_dir
 from metrics import compute_speed_profile
 
 
@@ -28,8 +28,7 @@ def show_representative_speed_profile(
     stop_threshold_kmh: float = 2.0
 ) -> None:
     if log_excel_path is None:
-        here = os.path.dirname(os.path.abspath(__file__))
-        log_excel_path = find_latest_log(os.path.join(here, "INPUT", "log"))
+        log_excel_path = find_latest_log(get_log_dir())
 
     sheets = pd.read_excel(log_excel_path, sheet_name=None)
     data_sheets = {

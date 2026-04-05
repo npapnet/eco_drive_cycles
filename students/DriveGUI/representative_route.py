@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from log_utils import find_latest_log
+from log_utils import find_latest_log, get_log_dir
 from metrics import compute_session_metrics, similarity, find_representative_sheet
 
 
@@ -36,9 +36,7 @@ def show_representative_route(
     % similarity column.
     """
     if log_excel_path is None:
-        here = os.path.dirname(os.path.abspath(__file__))
-        log_dir = os.path.join(here, "INPUT", "log")
-        log_excel_path = find_latest_log(log_dir)
+        log_excel_path = find_latest_log(get_log_dir())
 
     # Read every worksheet, skipping metadata sheets
     raw_sheets = pd.read_excel(log_excel_path, sheet_name=None)
