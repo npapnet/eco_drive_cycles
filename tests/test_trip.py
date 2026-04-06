@@ -25,15 +25,15 @@ _SEVEN_METRIC_KEYS = {"duration", "mean_speed", "mean_ns", "stops", "stop_pct", 
 def _make_processed_df(
     n: int = 10,
     speed_ms: float = 5.0,
-    smooth_col: str = "Εξομαλυνση",
+    smooth_col: str = "smooth_speed_kmh",
 ) -> pd.DataFrame:
-    """Minimal processed DataFrame matching the calculations-log format."""
+    """Minimal processed DataFrame matching the post-migration English column format."""
     return pd.DataFrame({
-        "Διάρκεια (sec)": list(range(n)),
+        "elapsed_s": list(range(n)),
         smooth_col: [speed_ms * 3.6] * n,
-        "Ταχ m/s": [speed_ms] * n,
-        "Επιταχυνση": [0.3] * n,
-        "Επιβραδυνση": [-0.2] * n,
+        "speed_ms": [speed_ms] * n,
+        "acceleration_ms2": [0.3] * n,
+        "deceleration_ms2": [-0.2] * n,
         "Engine Load(%)": [50.0] * n,
         "Fuel flow rate/hour(l/hr)": [2.0] * n,
         "CO\u2082 in g/km (Average)(g/km)": [120.0] * n,
@@ -102,20 +102,14 @@ class TestTrip:
         assert first == pytest.approx(10.0 * 3.6, abs=0.01)
 
     def test_speed_profile_returns_aligned_series(self):
-        t = Trip(_make_processed_df(n=8, smooth_col="Εξομαλυνση"), "s")
-        x, y = t.speed_profile
-        assert len(x) == len(y)
-        assert len(x) > 0
-
-    def test_speed_profile_accent_variant(self):
-        t = Trip(_make_processed_df(n=8, smooth_col="Εξομάλυνση"), "s")
+        t = Trip(_make_processed_df(n=8), "s")
         x, y = t.speed_profile
         assert len(x) == len(y)
         assert len(x) > 0
 
     def test_speed_profile_missing_column_raises(self):
         df = _make_processed_df()
-        df = df.drop(columns=["Εξομαλυνση"])
+        df = df.drop(columns=["smooth_speed_kmh"])
         t = Trip(df, "s")
         with pytest.raises(RuntimeError, match="not found"):
             _ = t.speed_profile
@@ -245,11 +239,11 @@ _REQUIRED_COLS = [
 ]
 
 _EXPECTED_OUTPUT_COLS = {
-    "Διάρκεια (sec)",
-    "Εξομαλυνση",
-    "Ταχ m/s",
-    "Επιταχυνση",
-    "Επιβραδυνση",
+    "elapsed_s",
+    "smooth_speed_kmh",
+    "speed_ms",
+    "acceleration_ms2",
+    "deceleration_ms2",
     "CO\u2082 in g/km (Average)(g/km)",
     "Engine Load(%)",
     "Fuel flow rate/hour(l/hr)",
@@ -281,9 +275,9 @@ class TestProcessRawDf:
 
     def test_output_has_duration_column(self):
         result = _process_raw_df(self._make_valid_raw())
-        assert "Διάρκεια (sec)" in result.columns
+        assert "elapsed_s" in result.columns
         # first duration value should be 0 (elapsed from start)
-        first = pd.to_numeric(result["Διάρκεια (sec)"], errors="coerce").dropna().iloc[0]
+        first = pd.to_numeric(result["elapsed_s"], errors="coerce").dropna().iloc[0]
         assert first == pytest.approx(0.0)
 
 
@@ -329,3 +323,281 @@ class TestInferSheetName:
         df = self._make_df_with_a2("Mon Sep 22 10:30:00 +0300 2019")
         name = _infer_sheet_name(df, tmp_path / "f.xlsx")
         assert len(name) <= 31
+
+
+# ────────────────────────────────────────────────────────────────
+# TestTripMaxSpeed
+# ────────────────────────────────────────────────────────────────
+
+class TestTripMaxSpeed:
+    def test_returns_max_speed_in_kmh(self):
+        df = _make_processed_df(speed_ms=10.0, n=5)
+        t = Trip(df, "s")
+        assert t.max_speed == pytest.approx(10.0 * 3.6, abs=0.01)
+
+    def test_returns_nan_when_speed_ms_absent(self):
+        df = pd.DataFrame({"elapsed_s": [0, 1, 2]})
+        t = Trip(df, "s")
+        assert np.isnan(t.max_speed)
+
+    def test_cached(self):
+        t = Trip(_make_processed_df(speed_ms=5.0), "s")
+        assert t.max_speed is t.max_speed  # same object from cache
+
+
+# ────────────────────────────────────────────────────────────────
+# TestTripLazyLoading
+# ────────────────────────────────────────────────────────────────
+
+class TestTripLazyLoading:
+    def test_df_none_with_path_loads_on_first_access(self, tmp_path):
+        """Trip(df=None) + _path → lazy load on first .metrics access."""
+        df = _make_processed_df(speed_ms=8.0)
+        parquet = tmp_path / "session.parquet"
+        df.to_parquet(parquet)
+
+        t = Trip(df=None, name="session")
+        t._path = parquet
+        # Access metrics → triggers load
+        assert t.mean_speed == pytest.approx(8.0 * 3.6, abs=0.01)
+
+    def test_df_loaded_once_and_cached(self, tmp_path):
+        """Second .metrics access does not re-read the file."""
+        df = _make_processed_df()
+        parquet = tmp_path / "s.parquet"
+        df.to_parquet(parquet)
+
+        t = Trip(df=None, name="s")
+        t._path = parquet
+        _ = t.metrics  # triggers load
+        # Internal __df should now be set; rename the file to prove no re-read
+        parquet.rename(tmp_path / "renamed.parquet")
+        _ = t.mean_speed  # should not raise even though file is gone
+
+    def test_df_none_path_none_raises_runtime_error(self):
+        """Trip(df=None) with no _path raises RuntimeError on access."""
+        t = Trip(df=None, name="orphan")
+        with pytest.raises(RuntimeError, match="no DataFrame"):
+            _ = t.metrics
+
+    def test_df_none_missing_file_raises_file_not_found(self, tmp_path):
+        """Trip(df=None) with missing parquet raises FileNotFoundError."""
+        t = Trip(df=None, name="gone")
+        t._path = tmp_path / "does_not_exist.parquet"
+        with pytest.raises(FileNotFoundError):
+            _ = t.metrics
+
+
+# ────────────────────────────────────────────────────────────────
+# TestTripCollectionParquet
+# ────────────────────────────────────────────────────────────────
+
+class TestTripCollectionParquet:
+    def test_roundtrip(self, tmp_path):
+        """to_parquet → from_parquet produces same trips."""
+        t1 = Trip(_make_processed_df(speed_ms=5.0), "morning")
+        t2 = Trip(_make_processed_df(speed_ms=8.0), "evening")
+        tc = TripCollection([t1, t2])
+        tc.to_parquet(tmp_path)
+
+        loaded = TripCollection.from_parquet(tmp_path)
+        assert len(loaded) == 2
+        names = {t.name for t in loaded}
+        assert names == {"morning", "evening"}
+
+    def test_roundtrip_metrics_preserved(self, tmp_path):
+        """Metrics computed from loaded parquet match original."""
+        t = Trip(_make_processed_df(speed_ms=10.0), "trip")
+        TripCollection([t]).to_parquet(tmp_path)
+        loaded = TripCollection.from_parquet(tmp_path)
+        assert loaded.trips[0].mean_speed == pytest.approx(10.0 * 3.6, abs=0.01)
+
+    def test_overwrite_by_default(self, tmp_path):
+        """Re-running to_parquet() overwrites existing files without error."""
+        t = Trip(_make_processed_df(speed_ms=5.0), "trip")
+        tc = TripCollection([t])
+        tc.to_parquet(tmp_path)  # first write
+        tc.to_parquet(tmp_path)  # second write — should not raise
+
+    def test_overwrite_false_raises_on_existing(self, tmp_path):
+        """overwrite=False raises ValueError if file already exists."""
+        t = Trip(_make_processed_df(), "trip")
+        tc = TripCollection([t])
+        tc.to_parquet(tmp_path)
+        with pytest.raises(ValueError, match="already exists"):
+            tc.to_parquet(tmp_path, overwrite=False)
+
+    def test_empty_collection_writes_no_files(self, tmp_path):
+        """Empty TripCollection writes nothing."""
+        TripCollection([]).to_parquet(tmp_path)
+        assert list(tmp_path.glob("*.parquet")) == []
+
+    def test_name_collision_within_collection_raises(self, tmp_path):
+        """Two trips with same sanitised name raise ValueError before any write."""
+        t1 = Trip(_make_processed_df(), "a/b")
+        t2 = Trip(_make_processed_df(), "a b")  # both sanitise to "a_b"
+        tc = TripCollection([t1, t2])
+        with pytest.raises(ValueError, match="collision"):
+            tc.to_parquet(tmp_path)
+        assert list(tmp_path.glob("*.parquet")) == []  # no partial writes
+
+    def test_special_chars_in_name_sanitised(self, tmp_path):
+        """Trip names with special chars produce valid filenames."""
+        t = Trip(_make_processed_df(), "2025-05-14 Morning (test)")
+        TripCollection([t]).to_parquet(tmp_path)
+        files = list(tmp_path.glob("*.parquet"))
+        assert len(files) == 1
+        assert " " not in files[0].name
+
+    def test_from_parquet_empty_directory(self, tmp_path):
+        """Empty directory returns empty TripCollection."""
+        tc = TripCollection.from_parquet(tmp_path)
+        assert len(tc) == 0
+
+    def test_from_parquet_missing_directory(self, tmp_path):
+        """Non-existent directory raises FileNotFoundError."""
+        with pytest.raises(FileNotFoundError):
+            TripCollection.from_parquet(tmp_path / "nonexistent")
+
+    def test_to_parquet_missing_directory(self, tmp_path):
+        """Non-existent directory raises FileNotFoundError."""
+        t = Trip(_make_processed_df(), "trip")
+        with pytest.raises(FileNotFoundError):
+            TripCollection([t]).to_parquet(tmp_path / "nonexistent")
+
+    def test_to_parquet_sets_path_on_trips(self, tmp_path):
+        """to_parquet() sets trip._path so to_duckdb_catalog() can find files."""
+        t = Trip(_make_processed_df(), "trip")
+        tc = TripCollection([t])
+        tc.to_parquet(tmp_path)
+        assert t._path is not None
+        assert t._path.exists()
+
+
+# ────────────────────────────────────────────────────────────────
+# TestTripCollectionDuckDB
+# ────────────────────────────────────────────────────────────────
+
+class TestTripCollectionDuckDB:
+    def test_roundtrip(self, tmp_path):
+        """to_duckdb_catalog → from_duckdb_catalog creates Trip stubs."""
+        t = Trip(_make_processed_df(speed_ms=10.0), "trip")
+        tc = TripCollection([t])
+        trips_dir = tmp_path / "trips"
+        trips_dir.mkdir()
+        tc.to_parquet(trips_dir)
+        db = tmp_path / "metadata.duckdb"
+        tc.to_duckdb_catalog(db)
+
+        loaded = TripCollection.from_duckdb_catalog(db)
+        assert len(loaded) == 1
+        assert loaded.trips[0].name == "trip"
+
+    def test_lazy_load_via_catalog(self, tmp_path):
+        """Trips loaded from catalog lazily load parquet on first .metrics access."""
+        t = Trip(_make_processed_df(speed_ms=8.0), "session")
+        tc = TripCollection([t])
+        trips_dir = tmp_path / "trips"
+        trips_dir.mkdir()
+        tc.to_parquet(trips_dir)
+        db = tmp_path / "metadata.duckdb"
+        tc.to_duckdb_catalog(db)
+
+        loaded = TripCollection.from_duckdb_catalog(db)
+        stub = loaded.trips[0]
+        assert stub._Trip__df is None  # not yet loaded
+        assert stub.mean_speed == pytest.approx(8.0 * 3.6, abs=0.01)  # triggers load
+
+    def test_upsert_idempotency(self, tmp_path):
+        """Calling to_duckdb_catalog() twice produces no duplicate rows."""
+        import duckdb
+        t = Trip(_make_processed_df(), "trip")
+        tc = TripCollection([t])
+        trips_dir = tmp_path / "trips"
+        trips_dir.mkdir()
+        tc.to_parquet(trips_dir)
+        db = tmp_path / "metadata.duckdb"
+        tc.to_duckdb_catalog(db)
+        tc.to_duckdb_catalog(db)  # second call
+
+        with duckdb.connect(str(db), read_only=True) as conn:
+            count = conn.execute("SELECT COUNT(*) FROM trip_metadata").fetchone()[0]
+        assert count == 1  # not 2
+
+    def test_empty_collection_no_op(self, tmp_path):
+        """Empty TripCollection does not truncate an existing catalog."""
+        import duckdb
+        t = Trip(_make_processed_df(), "existing")
+        tc = TripCollection([t])
+        trips_dir = tmp_path / "trips"
+        trips_dir.mkdir()
+        tc.to_parquet(trips_dir)
+        db = tmp_path / "metadata.duckdb"
+        tc.to_duckdb_catalog(db)
+
+        TripCollection([]).to_duckdb_catalog(db)  # empty — should not truncate
+
+        with duckdb.connect(str(db), read_only=True) as conn:
+            count = conn.execute("SELECT COUNT(*) FROM trip_metadata").fetchone()[0]
+        assert count == 1
+
+    def test_from_catalog_missing_db_raises(self, tmp_path):
+        """Non-existent db_path raises FileNotFoundError."""
+        with pytest.raises(FileNotFoundError):
+            TripCollection.from_duckdb_catalog(tmp_path / "does_not_exist.duckdb")
+
+    def test_from_catalog_empty_db_returns_empty(self, tmp_path):
+        """Catalog with zero rows returns empty TripCollection."""
+        import duckdb
+        db = tmp_path / "empty.duckdb"
+        with duckdb.connect(str(db)) as conn:
+            conn.execute("""
+                CREATE TABLE trip_metadata (
+                    trip_id VARCHAR PRIMARY KEY,
+                    parquet_path VARCHAR NOT NULL,
+                    start_time TIMESTAMP, end_time TIMESTAMP,
+                    duration_s DOUBLE, avg_velocity_kmh DOUBLE,
+                    max_velocity_kmh DOUBLE, avg_acceleration_ms2 DOUBLE,
+                    avg_deceleration_ms2 DOUBLE, idle_time_pct DOUBLE,
+                    stop_count INTEGER, estimated_fuel_liters DOUBLE,
+                    wavelet_anomaly_count INTEGER, markov_matrix_uri VARCHAR,
+                    pla_trajectory_uri VARCHAR
+                )
+            """)
+        tc = TripCollection.from_duckdb_catalog(db)
+        assert len(tc) == 0
+
+    def test_stale_parquet_path_raises_on_access(self, tmp_path):
+        """FileNotFoundError raised lazily when parquet_path no longer exists."""
+        t = Trip(_make_processed_df(), "trip")
+        tc = TripCollection([t])
+        trips_dir = tmp_path / "trips"
+        trips_dir.mkdir()
+        tc.to_parquet(trips_dir)
+        db = tmp_path / "metadata.duckdb"
+        tc.to_duckdb_catalog(db)
+
+        # Delete the parquet file to simulate stale catalog
+        (trips_dir / "trip.parquet").unlink()
+
+        loaded = TripCollection.from_duckdb_catalog(db)
+        with pytest.raises(FileNotFoundError):
+            _ = loaded.trips[0].metrics
+
+    def test_max_velocity_populated(self, tmp_path):
+        """max_velocity_kmh is stored (not NULL) for trips with speed_ms column."""
+        import duckdb
+        t = Trip(_make_processed_df(speed_ms=10.0), "trip")
+        tc = TripCollection([t])
+        trips_dir = tmp_path / "trips"
+        trips_dir.mkdir()
+        tc.to_parquet(trips_dir)
+        db = tmp_path / "metadata.duckdb"
+        tc.to_duckdb_catalog(db)
+
+        with duckdb.connect(str(db), read_only=True) as conn:
+            row = conn.execute(
+                "SELECT max_velocity_kmh FROM trip_metadata WHERE trip_id = 'trip'"
+            ).fetchone()
+        assert row is not None
+        assert row[0] == pytest.approx(10.0 * 3.6, abs=0.01)

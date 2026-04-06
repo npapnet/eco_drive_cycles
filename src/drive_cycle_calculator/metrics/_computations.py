@@ -36,6 +36,26 @@ _SEVEN_METRIC_KEYS = (
     "mean_dec",
 )
 
+# Maps Greek column names (from raw xlsx / calculations-log) to English package API names.
+# Applied at both entry points: _process_raw_df() and TripCollection.from_excel().
+COLUMN_MAP = {
+    "Διάρκεια (sec)": "elapsed_s",
+    "Ταχ m/s": "speed_ms",
+    "Εξομαλυνση": "smooth_speed_kmh",
+    "Εξομάλυνση": "smooth_speed_kmh",   # accent variant
+    "Επιταχυνση": "acceleration_ms2",
+    "Επιβραδυνση": "deceleration_ms2",
+    "Speed (OBD)(km/h)": "speed_kmh",
+}
+
+
+def _normalise_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Rename Greek column names to English at the package boundary.
+
+    Safe to call multiple times — idempotent. Unknown columns pass through unchanged.
+    """
+    return df.rename(columns=COLUMN_MAP)
+
 _REQUIRED_RAW_COLS = [
     "GPS Time",
     "Speed (OBD)(km/h)",
@@ -56,13 +76,13 @@ def _compute_session_metrics(
     Missing columns return NaN rather than raising.
     """
     duration = (
-        float(df["Διάρκεια (sec)"].dropna().max())
-        if "Διάρκεια (sec)" in df.columns
+        float(df["elapsed_s"].dropna().max())
+        if "elapsed_s" in df.columns
         else np.nan
     )
 
-    if "Ταχ m/s" in df.columns:
-        speed_ms = pd.to_numeric(df["Ταχ m/s"], errors="coerce").dropna()
+    if "speed_ms" in df.columns:
+        speed_ms = pd.to_numeric(df["speed_ms"], errors="coerce").dropna()
     else:
         speed_ms = pd.Series(dtype=float)
     speed_kmh = speed_ms * 3.6
@@ -76,13 +96,13 @@ def _compute_session_metrics(
     stop_pct = (stops / total_rows * 100) if total_rows else 0.0
 
     mean_acc = (
-        float(pd.to_numeric(df["Επιταχυνση"], errors="coerce").mean())
-        if "Επιταχυνση" in df.columns
+        float(pd.to_numeric(df["acceleration_ms2"], errors="coerce").mean())
+        if "acceleration_ms2" in df.columns
         else np.nan
     )
     mean_dec = (
-        float(pd.to_numeric(df["Επιβραδυνση"], errors="coerce").mean())
-        if "Επιβραδυνση" in df.columns
+        float(pd.to_numeric(df["deceleration_ms2"], errors="coerce").mean())
+        if "deceleration_ms2" in df.columns
         else np.nan
     )
 
@@ -156,15 +176,15 @@ def _process_raw_df(df_raw: pd.DataFrame) -> pd.DataFrame:
     derived = _smooth_and_derive(speed_kmh)
 
     return pd.DataFrame(OrderedDict([
-        ("Διάρκεια (sec)", duration),
+        ("elapsed_s", duration),
         ("CO\u2082 in g/km (Average)(g/km)", df_raw["CO\u2082 in g/km (Average)(g/km)"]),
         ("Engine Load(%)", df_raw["Engine Load(%)"]),
         ("Fuel flow rate/hour(l/hr)", df_raw["Fuel flow rate/hour(l/hr)"]),
-        ("Εξομαλυνση", derived["smooth_speed"]),
-        ("Ταχ m/s", derived["speed_ms"]),
+        ("smooth_speed_kmh", derived["smooth_speed"]),
+        ("speed_ms", derived["speed_ms"]),
         ("a(m/s2)", derived["acceleration"]),
-        ("Επιταχυνση", derived["pos_acc"]),
-        ("Επιβραδυνση", derived["neg_acc"]),
+        ("acceleration_ms2", derived["pos_acc"]),
+        ("deceleration_ms2", derived["neg_acc"]),
     ]))
 
 
