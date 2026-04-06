@@ -39,6 +39,5 @@ data/
 
 ## Note on DriveGUI
 
-`students/DriveGUI/` is a **frozen** historical reference. This `examples/` directory
-is its successor. When `examples/gui/` covers the same feature set, DriveGUI will be
-formally deprecated.
+`students/DriveGUI/` is **frozen** — a self-contained historical reference with no package
+dependencies. This `examples/` directory is its active successor.
