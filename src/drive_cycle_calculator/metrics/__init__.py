@@ -3,6 +3,7 @@ from drive_cycle_calculator.metrics._computations import (
     compute_average_deceleration,
     # Public flat functions — backward-compat exports
     compute_average_speed,
+    load_raw_df,
     compute_average_speed_without_stops,
     compute_co2_emissions,
     compute_engine_load,
@@ -21,6 +22,7 @@ from drive_cycle_calculator.metrics.trip import Trip, TripCollection
 __all__ = [
     "Trip",
     "TripCollection",
+    "load_raw_df",
     "compute_average_speed",
     "compute_average_speed_without_stops",
     "compute_average_acceleration",

@@ -4,6 +4,7 @@
 __pycache__/
 *.py[od]
 *$py.class
+*.pyc
 
 # Environments
 .env
@@ -36,15 +37,14 @@ dist/
 *.egg-info/
 *.egg
 
-
+# ===== Project-specific ignores =====
 # Ignore all data files
-
 _data/*.zip
 _data/complete_extract/
-*.pyc
 _data/latin_characters_data.7z
 
 # Generated calculation logs
 students/DriveGUI/INPUT/log/
 students/DriveGUI/log/
 raw_data/**/log/
+data/

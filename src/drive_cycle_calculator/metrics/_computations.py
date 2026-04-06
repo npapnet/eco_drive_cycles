@@ -175,11 +175,16 @@ def _process_raw_df(df_raw: pd.DataFrame) -> pd.DataFrame:
     speed_kmh = pd.to_numeric(df_raw["Speed (OBD)(km/h)"], errors="coerce")
     derived = _smooth_and_derive(speed_kmh)
 
+    # Torque exports non-numeric cells (e.g. sensor-off rows) as "-".
+    # Coerce to float so pyarrow writes a clean float64 column, not object.
+    def _to_float(series: pd.Series) -> pd.Series:
+        return pd.to_numeric(series, errors="coerce")
+
     return pd.DataFrame(OrderedDict([
         ("elapsed_s", duration),
-        ("CO\u2082 in g/km (Average)(g/km)", df_raw["CO\u2082 in g/km (Average)(g/km)"]),
-        ("Engine Load(%)", df_raw["Engine Load(%)"]),
-        ("Fuel flow rate/hour(l/hr)", df_raw["Fuel flow rate/hour(l/hr)"]),
+        ("CO\u2082 in g/km (Average)(g/km)", _to_float(df_raw["CO\u2082 in g/km (Average)(g/km)"])),
+        ("Engine Load(%)", _to_float(df_raw["Engine Load(%)"])),
+        ("Fuel flow rate/hour(l/hr)", _to_float(df_raw["Fuel flow rate/hour(l/hr)"])),
         ("smooth_speed_kmh", derived["smooth_speed"]),
         ("speed_ms", derived["speed_ms"]),
         ("a(m/s2)", derived["acceleration"]),
@@ -215,6 +220,39 @@ def _infer_sheet_name(df_raw: pd.DataFrame, xlsx_path: Path) -> str:
 
     session = "Morning" if dt.hour < 12 else "Evening"
     return f"{dt.date().isoformat()}_{session}"[:31]
+
+
+def load_raw_df(path: str | Path) -> pd.DataFrame:
+    """Load a raw OBD xlsx file exactly as Torque exported it — no processing.
+
+    Returns the unmodified DataFrame so callers can inspect column names, dtypes,
+    missing values, and raw sensor readings before any smoothing or derivation.
+
+    Typical use: auditing a file, exploring data quality, comparing with the
+    processed form returned by _process_raw_df().
+
+    Parameters
+    ----------
+    path : str | Path
+        Path to an OBD xlsx file produced by the Torque app.
+
+    Returns
+    -------
+    pd.DataFrame
+        Raw DataFrame, one row per GPS sample. All columns as exported by Torque
+        (dtype object for sensor-off cells like '-').
+
+    Raises
+    ------
+    FileNotFoundError
+        If the file does not exist.
+    ValueError
+        If pandas cannot parse the file as an xlsx workbook.
+    """
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f"File not found: {path}")
+    return pd.read_excel(path)
 
 
 # ────────────────────────────────────────────────────────────────────────────

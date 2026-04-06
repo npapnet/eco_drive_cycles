@@ -280,6 +280,39 @@ class TestProcessRawDf:
         first = pd.to_numeric(result["elapsed_s"], errors="coerce").dropna().iloc[0]
         assert first == pytest.approx(0.0)
 
+    def test_dash_placeholders_coerced_to_float_not_object(self, tmp_path):
+        """Torque '-' sensor-off markers must not produce object-dtype columns.
+
+        Regression: pyarrow raises ArrowTypeError when a column has dtype=object
+        with mixed str/float values. The three passthrough columns (CO2, Engine
+        Load, Fuel flow) must be float64 after processing.
+        """
+        n = 5
+        df_raw = pd.DataFrame({
+            "GPS Time": list(range(n)),
+            "Speed (OBD)(km/h)": [30.0] * n,
+            # Mix of '-' strings and real floats, exactly as Torque exports
+            "CO\u2082 in g/km (Average)(g/km)": ["-", "-", 47.5, 53.6, "-"],
+            "Engine Load(%)": ["-", 30.2, 31.8, 30.9, 31.4],
+            "Fuel flow rate/hour(l/hr)": ["-", "-", 0.99, 0.79, "-"],
+        })
+        result = _process_raw_df(df_raw)
+
+        for col in [
+            "CO\u2082 in g/km (Average)(g/km)",
+            "Engine Load(%)",
+            "Fuel flow rate/hour(l/hr)",
+        ]:
+            assert result[col].dtype == float, (
+                f"Column {col!r} should be float64, got {result[col].dtype}. "
+                "Torque '-' markers must be coerced to NaN at ingest."
+            )
+
+        # Verify parquet write succeeds (the original failure point)
+        path = tmp_path / "trip.parquet"
+        result.to_parquet(path, index=True)
+        assert path.exists()
+
 
 # ────────────────────────────────────────────────────────────────
 # TestInferSheetName
