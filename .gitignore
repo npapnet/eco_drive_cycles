@@ -47,3 +47,4 @@ _data/latin_characters_data.7z
 # Generated calculation logs
 students/DriveGUI/INPUT/log/
 students/DriveGUI/log/
+raw_data/**/log/
