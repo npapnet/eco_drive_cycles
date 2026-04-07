@@ -13,7 +13,7 @@ Raw driving-cycle data (`_data/`) was collected via the Torque app and exported 
 ## Running the Code
 
 ```bash
-# Run the full test suite (120 tests)
+# Run the full test suite (124 tests)
 uv run pytest
 
 # Launch the new GUI example (ingest → catalog → speed profile chart)
@@ -38,9 +38,10 @@ The separation of calculation from presentation is complete. The package (`src/d
 
 Current priorities (see `TODOS.md` for full backlog):
 
-1. **Microtrip segmentation** (`Trip.microtrips`) — the core unit for WLTP-style driving-cycle construction.
-2. **Representative microtrip selection** and **candidate cycle assembly** — downstream of segmentation.
-3. **Fix stop_percentage heuristic** — silent wrong-result bug in `students/DriveGUI/stop_percentage.py:72` and `total_stop_percentage.py:85` (now unblocked by the Greek→English migration).
+1. **OBDFile + ProcessingConfig refactor** — two-stage archive pipeline. Design finalized at `docs/designs/obd-file-processing-config.md`. Implementation next.
+2. **Microtrip segmentation** (`Trip.microtrips`) — the core unit for WLTP-style driving-cycle construction.
+3. **Representative microtrip selection** and **candidate cycle assembly** — downstream of segmentation.
+4. **Fix stop_percentage heuristic** — silent wrong-result bug in `students/DriveGUI/stop_percentage.py:72` and `total_stop_percentage.py:85`.
 
 When suggesting or making changes: does it belong in `src/drive_cycle_calculator/` (calculation) or `examples/` (presentation)? Never add business logic to `students/DriveGUI/`.
 
