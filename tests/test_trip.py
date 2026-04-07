@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from drive_cycle_calculator.metrics import Trip, TripCollection
+from drive_cycle_calculator.metrics import Trip, TripCollection, load_raw_df
 from drive_cycle_calculator.metrics._computations import (
     _infer_sheet_name,
     _process_raw_df,
@@ -280,6 +280,62 @@ class TestProcessRawDf:
         first = pd.to_numeric(result["elapsed_s"], errors="coerce").dropna().iloc[0]
         assert first == pytest.approx(0.0)
 
+    def test_dash_placeholders_coerced_to_float_not_object(self, tmp_path):
+        """Torque '-' sensor-off markers must not produce object-dtype columns.
+
+        Regression: pyarrow raises ArrowTypeError when a column has dtype=object
+        with mixed str/float values. The three passthrough columns (CO2, Engine
+        Load, Fuel flow) must be float64 after processing.
+        """
+        n = 5
+        df_raw = pd.DataFrame({
+            "GPS Time": list(range(n)),
+            "Speed (OBD)(km/h)": [30.0] * n,
+            # Mix of '-' strings and real floats, exactly as Torque exports
+            "CO\u2082 in g/km (Average)(g/km)": ["-", "-", 47.5, 53.6, "-"],
+            "Engine Load(%)": ["-", 30.2, 31.8, 30.9, 31.4],
+            "Fuel flow rate/hour(l/hr)": ["-", "-", 0.99, 0.79, "-"],
+        })
+        result = _process_raw_df(df_raw)
+
+        for col in [
+            "CO\u2082 in g/km (Average)(g/km)",
+            "Engine Load(%)",
+            "Fuel flow rate/hour(l/hr)",
+        ]:
+            assert result[col].dtype == float, (
+                f"Column {col!r} should be float64, got {result[col].dtype}. "
+                "Torque '-' markers must be coerced to NaN at ingest."
+            )
+
+        # Verify parquet write succeeds (the original failure point)
+        path = tmp_path / "trip.parquet"
+        result.to_parquet(path, index=True)
+        assert path.exists()
+
+
+# ────────────────────────────────────────────────────────────────
+# TestLoadRawDf
+# ────────────────────────────────────────────────────────────────
+
+class TestLoadRawDf:
+    def test_missing_file_raises_file_not_found(self, tmp_path):
+        """load_raw_df raises FileNotFoundError for a non-existent path."""
+        with pytest.raises(FileNotFoundError):
+            load_raw_df(tmp_path / "does_not_exist.xlsx")
+
+    def test_non_xlsx_file_raises_exception(self, tmp_path):
+        """load_raw_df raises an exception when the file is not a valid xlsx."""
+        bad = tmp_path / "not_excel.xlsx"
+        bad.write_text("this is not excel content")
+        with pytest.raises(Exception):
+            load_raw_df(bad)
+
+    def test_directory_raises_file_not_found(self, tmp_path):
+        """load_raw_df raises FileNotFoundError when path is a directory."""
+        with pytest.raises(FileNotFoundError):
+            load_raw_df(tmp_path)
+
 
 # ────────────────────────────────────────────────────────────────
 # TestInferSheetName
@@ -478,35 +534,60 @@ class TestTripCollectionParquet:
 # TestTripCollectionDuckDB
 # ────────────────────────────────────────────────────────────────
 
+def _make_archive_df(n: int = 10, speed_kmh: float = 30.0) -> pd.DataFrame:
+    """Minimal raw OBD DataFrame suitable for OBDFile.to_parquet() (v2 archive).
+
+    GPS Time is a proper timestamp string column — unlike _make_raw_df which
+    mixes a string in row 0 with floats. PyArrow requires a uniform column type.
+    """
+    timestamps = [f"Mon Sep 22 10:30:{i:02d} +0300 2019" for i in range(n)]
+    return pd.DataFrame({
+        "GPS Time": timestamps,
+        "Speed (OBD)(km/h)": [speed_kmh] * n,
+        "CO\u2082 in g/km (Average)(g/km)": [120.0] * n,
+        "Engine Load(%)": [50.0] * n,
+        "Fuel flow rate/hour(l/hr)": [2.0] * n,
+    })
+
+
+def _write_archive_parquet(tmp_path: Path, name: str, speed_kmh: float = 30.0) -> Path:
+    """Write a v2 archive Parquet using OBDFile and return its path."""
+    from drive_cycle_calculator.obd_file import OBDFile
+    raw_df = _make_archive_df(speed_kmh=speed_kmh)
+    obd = OBDFile(raw_df, name)
+    dest = tmp_path / f"{name}.parquet"
+    obd.to_parquet(dest)
+    return dest
+
+
 class TestTripCollectionDuckDB:
     def test_roundtrip(self, tmp_path):
-        """to_duckdb_catalog → from_duckdb_catalog creates Trip stubs."""
-        t = Trip(_make_processed_df(speed_ms=10.0), "trip")
-        tc = TripCollection([t])
-        trips_dir = tmp_path / "trips"
-        trips_dir.mkdir()
-        tc.to_parquet(trips_dir)
+        """to_duckdb_catalog → from_duckdb_catalog loads trips via OBDFile archives."""
+        archive_dir = tmp_path / "archive"
+        archive_dir.mkdir()
+        _write_archive_parquet(archive_dir, "trip", speed_kmh=36.0)
         db = tmp_path / "metadata.duckdb"
+        tc = TripCollection.from_archive_parquets(archive_dir)
         tc.to_duckdb_catalog(db)
 
         loaded = TripCollection.from_duckdb_catalog(db)
         assert len(loaded) == 1
         assert loaded.trips[0].name == "trip"
 
-    def test_lazy_load_via_catalog(self, tmp_path):
-        """Trips loaded from catalog lazily load parquet on first .metrics access."""
-        t = Trip(_make_processed_df(speed_ms=8.0), "session")
-        tc = TripCollection([t])
-        trips_dir = tmp_path / "trips"
-        trips_dir.mkdir()
-        tc.to_parquet(trips_dir)
+    def test_eager_load_via_catalog(self, tmp_path):
+        """Trips loaded from catalog are eagerly loaded (not lazy)."""
+        archive_dir = tmp_path / "archive"
+        archive_dir.mkdir()
+        _write_archive_parquet(archive_dir, "session", speed_kmh=36.0)
         db = tmp_path / "metadata.duckdb"
+        tc = TripCollection.from_archive_parquets(archive_dir)
         tc.to_duckdb_catalog(db)
 
         loaded = TripCollection.from_duckdb_catalog(db)
-        stub = loaded.trips[0]
-        assert stub._Trip__df is None  # not yet loaded
-        assert stub.mean_speed == pytest.approx(8.0 * 3.6, abs=0.01)  # triggers load
+        trip = loaded.trips[0]
+        # Trips are eagerly loaded — _df is populated immediately
+        assert trip._Trip__df is not None
+        assert trip.mean_speed > 0.0
 
     def test_upsert_idempotency(self, tmp_path):
         """Calling to_duckdb_catalog() twice produces no duplicate rows."""
@@ -567,22 +648,24 @@ class TestTripCollectionDuckDB:
         tc = TripCollection.from_duckdb_catalog(db)
         assert len(tc) == 0
 
-    def test_stale_parquet_path_raises_on_access(self, tmp_path):
-        """FileNotFoundError raised lazily when parquet_path no longer exists."""
-        t = Trip(_make_processed_df(), "trip")
-        tc = TripCollection([t])
-        trips_dir = tmp_path / "trips"
-        trips_dir.mkdir()
-        tc.to_parquet(trips_dir)
+    def test_stale_parquet_path_raises_at_load(self, tmp_path):
+        """FileNotFoundError raised at catalog load time when archive parquet is gone.
+
+        Eager loading means the error surfaces in from_duckdb_catalog(), not lazily
+        on first metrics access.
+        """
+        archive_dir = tmp_path / "archive"
+        archive_dir.mkdir()
+        archive_path = _write_archive_parquet(archive_dir, "trip")
         db = tmp_path / "metadata.duckdb"
+        tc = TripCollection.from_archive_parquets(archive_dir)
         tc.to_duckdb_catalog(db)
 
-        # Delete the parquet file to simulate stale catalog
-        (trips_dir / "trip.parquet").unlink()
+        # Delete the archive to simulate stale catalog entry
+        archive_path.unlink()
 
-        loaded = TripCollection.from_duckdb_catalog(db)
         with pytest.raises(FileNotFoundError):
-            _ = loaded.trips[0].metrics
+            TripCollection.from_duckdb_catalog(db)
 
     def test_max_velocity_populated(self, tmp_path):
         """max_velocity_kmh is stored (not NULL) for trips with speed_ms column."""

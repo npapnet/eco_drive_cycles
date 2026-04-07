@@ -1,5 +1,7 @@
 # DriveGUI Architecture and Data Flow
 
+> **FROZEN** — `students/DriveGUI/` is a historical reference implementation. It is self-contained and must NOT import from `src/drive_cycle_calculator`. The active successor is `examples/gui/main.py`. This file documents the original student code as-is.
+
 ## Overview
 The `DriveGUI` toolkit is a Python-based application designed to process and visualize eco-driving data logs from vehicle OBD/GPS systems. The application features a graphical user interface (GUI) built with `tkinter` and relies heavily on `pandas` for data manipulation and `matplotlib` for generating charts.
 

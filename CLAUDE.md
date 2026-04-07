@@ -13,35 +13,65 @@ Raw driving-cycle data (`_data/`) was collected via the Torque app and exported 
 ## Running the Code
 
 ```bash
-# Launch the main GUI
+# Run the full test suite (198 tests)
+uv run pytest
+
+# Launch the new GUI example (ingest → catalog → speed profile chart)
+python examples/gui/main.py
+
+# Ingest raw .xlsx files into Parquet + DuckDB catalog
+python examples/cli/ingest.py <raw_xlsx_dir> <output_dir>
+
+# Analyze trips from catalog (similarity scores, representative trip)
+python examples/cli/analyze.py <output_dir>
+
+# Launch the frozen historical DriveGUI (standalone, no package dependencies)
 cd students/DriveGUI
 python driving_cycles_calculatorV1.py
-
-# Run a single visualization module standalone
-python average_speed.py
 ```
 
-No build system, test framework, or linter is configured. This is a known gap and a current priority.
+The project uses a **uv workspace** with `ruff` for linting and `pytest` for tests. Run `uv sync` from the root to install all dependencies.
 
 ## Development Priorities
 
-The student code works but mixes concerns heavily — calculation logic and presentation (Matplotlib charts, Tkinter GUI) are interleaved throughout. Refining this is the first major engineering task.
+The separation of calculation from presentation is complete. The package (`src/drive_cycle_calculator/`) holds all computation logic. `students/DriveGUI/` is frozen as a historical reference.
 
-Ordered priorities:
+Current priorities (see `TODOS.md` for full backlog):
 
-1. **Separate calculation from presentation.** Extract pure computation (speed smoothing, acceleration derivation, metric aggregation, representative-route scoring) into standalone functions with no GUI or chart dependencies. The 13 visualization modules each re-implement data loading and metric computation inline — this logic should live in a shared calculation layer.
+1. **Microtrip segmentation** (`Trip.microtrips`) — the core unit for WLTP-style driving-cycle construction.
+2. **Representative microtrip selection** and **candidate cycle assembly** — downstream of segmentation.
+3. **Fix stop_percentage heuristic** — silent wrong-result bug in `students/DriveGUI/stop_percentage.py:72` and `total_stop_percentage.py:85`.
 
-2. **Add unit tests.** Once calculation logic is isolated, write unit tests against it. Tests are the safety net that makes all future refactoring safe. Start with `calculations.py` core transforms (time conversion, smoothing, acceleration splitting) and the similarity scoring in `representative_route.py`.
-
-3. **Add a linter.** Configure a linter (e.g. `ruff`) to enforce code style and catch obvious errors. This should be set up before new code is written, not after.
-
-4. **Incrementally improve the student code** with the above infrastructure in place.
-
-When suggesting or making changes, always ask: does this respect the calculation/presentation boundary? Is it testable in isolation?
+When suggesting or making changes: does it belong in `src/drive_cycle_calculator/` (calculation) or `examples/` (presentation)? Never add business logic to `students/DriveGUI/`.
 
 ## Architecture
 
-### Data Pipeline (`students/DriveGUI/`)
+### Package (`src/drive_cycle_calculator/`)
+
+The active calculation layer. All business logic lives here.
+
+```
+Raw .xlsx (OBD-II)
+  → TripCollection.from_folder(dir)   # processes all .xlsx in a directory
+  → TripCollection.to_parquet(dir)    # writes one .parquet per trip
+  → TripCollection.to_duckdb_catalog(db_path)  # upserts metadata catalog
+
+Later:
+  → TripCollection.from_duckdb_catalog(db_path)  # lazy-load trip stubs
+  → tc.similarity_scores()            # 7-metric scoring (all trips vs fleet avg)
+  → tc.find_representative()          # argmax of similarity scores
+  → trip.speed_profile()              # DataFrame: elapsed_s + smooth_speed_kmh
+```
+
+Key classes:
+- **`Trip(df, name)`** — wraps one processed DataFrame. `_df` is lazy-loaded from `_path` if `df=None`. `@cached_property` metrics: `mean_speed`, `mean_acc`, `mean_dec`, `stop_pct`, `duration`, `num_stops`, `mean_speed_moving`, `max_speed`.
+- **`TripCollection`** — spans multiple trips. `from_folder()`, `from_excel()`, `from_parquet()`, `from_duckdb_catalog()` constructors. `to_parquet()` and `to_duckdb_catalog()` persistence.
+
+Internal column names are English: `elapsed_s`, `speed_ms`, `smooth_speed_kmh`, `acceleration_ms2`, `deceleration_ms2`.
+
+### Frozen Historical Reference (`students/DriveGUI/`)
+
+⚠️ **FROZEN** — do not add package imports or new features here. This is a self-contained historical reference implementation. It must run standalone forever regardless of package API changes.
 
 ```
 Raw .xlsx (OBD-II)
@@ -49,18 +79,15 @@ Raw .xlsx (OBD-II)
   → <metric>_chart.py (×13)  # Each reads the log and renders a Matplotlib chart
 ```
 
-**`calculations.py`** is the processing core:
-- Converts GPS Time to elapsed seconds
-- Smooths speed with a rolling mean (window=4, center=True)
-- Converts km/h → m/s, differentiates to get acceleration
-- Splits acceleration into positive/negative columns
-- Outputs one Excel sheet per session under `INPUT/log/`
+Output column names stay Greek (`Διάρκεια (sec)`, `Ταχ m/s`, etc.) as expected by the 13 visualization modules.
 
-**`driving_cycles_calculatorV1.py`** is the Tkinter GUI entry point. It orchestrates folder selection and calls `calculations.py`, then dynamically loads the 13 visualization modules.
+### Examples (`examples/`)
 
-**13 visualization modules** (one metric each): `average_speed`, `average_acceleration`, `average_deceleration`, `max_speed`, `stop_percentage`, `number_of_stops`, `total_stop_percentage`, `engine_load`, `fuel_consumption_chart`, `co2_chart`, `representative_route`, `speed_profile`, and one more. Each is ~110 lines and follows the same pattern: load the calculations log → compute the metric → render a grouped bar chart.
+Thin wrappers over `TripCollection`. No business logic.
 
-**`representative_route.py`** scores each session against the average across 7 metrics to nominate the most representative trip for driving-cycle research (similarity score = `100 − |session − avg| / |avg| × 100`).
+- `examples/cli/ingest.py` — ingest raw .xlsx → Parquet + DuckDB
+- `examples/cli/analyze.py` — load from catalog → print similarity scores + representative trip
+- `examples/gui/main.py` — Tkinter + Matplotlib GUI: folder picker → ingest → catalog → speed profile
 
 ### Data (`_data/`)
 
@@ -80,14 +107,19 @@ Raw .xlsx (OBD-II)
 
 ## Key Documentation
 
-- `students/DriveGUI/ARCHITECTURE.md` — module-by-module documentation
+- `students/DriveGUI/ARCHITECTURE.md` — module-by-module documentation for the frozen DriveGUI
 - `students/DriveGUI/PROCESSING_LOGIC.md` — mathematical formulas and filtering details
-- `docs/data_schema/data_schema.md` — Entity-Relationship Diagram for the full system
+- `brainstorming/data_schema/data_schema.md` — Entity-Relationship Diagram for the full system
+- `brainstorming/data_schema/FUEL_EKO_wars.dbml` — DBML schema (target PostgreSQL/Supabase)
 - `DATA.md` — data collection notes and Google Drive link
+- `examples/README.md` — how to use the CLI and GUI examples
+- `TODOS.md` — prioritised backlog
 
 ## Language Note
 
-Variable names, UI labels, and Excel column headers frequently use **Greek** (e.g., `Διάρκεια (sec)`, `Ταχ m/s`). This is intentional — do not rename them without checking all downstream references.
+**Package (`src/`):** all internal column names are **English** (`elapsed_s`, `speed_ms`, `smooth_speed_kmh`, `acceleration_ms2`, `deceleration_ms2`). Renaming happens at entry points via `COLUMN_MAP` in `_computations.py`.
+
+**DriveGUI (`students/DriveGUI/`):** all column names remain **Greek** (`Διάρκεια (sec)`, `Ταχ m/s`, etc.) because the 13 visualization modules depend on them. Do not change these.
 
 ## Skill routing
 

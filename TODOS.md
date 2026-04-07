@@ -1,5 +1,23 @@
 # TODOS
 
+## ~~P1 — OBDFile + ProcessingConfig refactor~~ ✓ DONE
+
+**What:** Two-stage archive pipeline. `OBDFile` wraps a raw OBD xlsx/CSV/Parquet file.
+`ProcessingConfig` (dataclass with `window` and `stop_threshold_kmh`) applies smoothing,
+acceleration derivation, and column renaming via `apply(curated_df)`. `DEFAULT_CONFIG`
+is `ProcessingConfig(window=4)`.
+
+**Shipped:**
+- `src/drive_cycle_calculator/_schema.py` — dependency-free `OBD_COLUMN_MAP`, `CURATED_COLS`, `_gps_to_duration_seconds`
+- `src/drive_cycle_calculator/obd_file.py` — `OBDFile.from_xlsx/from_csv/from_parquet`, `to_parquet` (v2 format), `curated_df`, `quality_report`, `to_trip`
+- `src/drive_cycle_calculator/processing_config.py` — `ProcessingConfig`, `config_hash`, `DEFAULT_CONFIG`
+- `src/drive_cycle_calculator/metrics/trip_collection.py` — `TripCollection` extracted from `trip.py`; adds `from_folder_raw`, `from_archive_parquets`, `from_duckdb_catalog` (eager via OBDFile)
+- `scripts/migrate_to_archive.py` — one-shot xlsx → v2 Parquet converter
+- `examples/cli/ingest.py` — updated for two-stage workflow
+- 74 new tests; 198 total passing
+
+---
+
 ## ~~P2~~ → ~~P1 — Migrate internal column names from Greek to English~~ ✓ DONE
 
 **What:** Rename all Greek column names in the package computation layer to English at
@@ -8,6 +26,57 @@ the package entry points (`_process_raw_df()` and `TripCollection.from_excel()`)
 points (`_process_raw_df()` and `TripCollection.from_excel()`). All internal package
 code uses English column names. DriveGUI Excel output remains Greek (user-facing).
 120 tests passing.
+
+---
+
+## ~~P1 — Rationalise Parquet Columns~~ → subsumed by OBDFile + ProcessingConfig refactor
+
+**Resolved by:** The OBDFile + ProcessingConfig refactor (planned 2026-04-07).
+Archive Parquets store all raw OBD columns (no derived columns). ProcessingConfig.apply()
+produces `smooth_speed_kmh` and `acc_ms2` in-memory only — no redundant persisted columns.
+`speed_ms` (= smooth_speed_kmh/3.6) and `acceleration_ms2`/`deceleration_ms2` (= subsets
+of acc_ms2) are removed from all persisted storage.
+
+
+---
+
+## P2 — First-batch data quality audit + future acquisition spec
+
+**What:** Run `scripts/migrate_to_archive.py` against the first batch of raw data
+(Galatas, Stefanakis, Kalyvas, Ladikas) and document which files fail, which columns
+are missing or malformed, and what the spread of issues is per driver. Then define a
+minimum column spec for future data acquisition sessions.
+
+**Why:** The first batch was collected without standardized specs — it's a reconnaissance
+dataset. When future data collection happens (or students collect new data), they should
+receive an explicit list of required Torque columns before starting. Without this, the same
+quality issues will recur with each new batch.
+
+**How to apply:** After the OBDFile + ProcessingConfig refactor lands, run the migration
+script against `raw_data/`. Review the `SKIP` output. Write a `docs/data_acquisition_spec.md`
+listing: required OBD-II channels, expected dtypes, known Torque export quirks (GPS Time
+format, dash placeholders). Reference CURATED_COLS as the minimum viable set.
+
+**Effort:** S (human: ~2 hrs / CC: ~10 min)
+
+**Depends on:** OBDFile + ProcessingConfig refactor must land first (migration script).
+
+---
+
+## P2 — `OBDFile.compare_smoothing(windows=[2, 4, 8])`
+
+**What:** Method on `OBDFile` that applies `ProcessingConfig(window=w)` for each window
+size and returns a DataFrame of key metrics (mean_speed, mean_acc, stop_pct) per window.
+Useful for choosing the right smoothing parameter before committing to a ProcessingConfig.
+
+**Why:** The window=4 default was inherited from the student DriveGUI. No empirical basis.
+Researchers need a quick way to see how metric stability changes with window size.
+
+**Where:** `src/drive_cycle_calculator/obd_file.py`
+
+**Effort:** S (human: ~1 hr / CC: ~10 min)
+
+**Depends on:** OBDFile + ProcessingConfig refactor must land first.
 
 ---
 

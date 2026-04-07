@@ -1,0 +1,51 @@
+{
+  "date": "2026-04-06",
+  "window": "7d",
+  "metrics": {
+    "commits": 9,
+    "commits_main": 4,
+    "contributors": 1,
+    "prs_merged": 0,
+    "insertions": 9922,
+    "deletions": 2233,
+    "net_loc": 7689,
+    "test_loc": 1241,
+    "test_ratio": 0.125,
+    "active_days": 5,
+    "sessions": 8,
+    "deep_sessions": 0,
+    "avg_session_minutes": 20,
+    "loc_per_session_hour": 2950,
+    "feat_pct": 0.11,
+    "fix_pct": 0.11,
+    "refactor_pct": 0.33,
+    "chore_pct": 0.22,
+    "peak_hour": 23,
+    "ai_assisted_commits": 6
+  },
+  "authors": {
+    "Nikolaos Papadakis (SpinLnx)": {
+      "commits": 9,
+      "insertions": 9922,
+      "deletions": 2233,
+      "test_ratio": 0.125,
+      "top_area": "students/DriveGUI"
+    }
+  },
+  "test_health": {
+    "total_test_files": 6,
+    "tests_added_this_period": 6,
+    "regression_test_commits": 0,
+    "test_files_changed": 6
+  },
+  "backlog": {
+    "total_open": 9,
+    "p0_p1": 3,
+    "p2": 4,
+    "completed_this_period": 6,
+    "added_this_period": 1
+  },
+  "streak_days_main": 1,
+  "streak_days_branch": 3,
+  "tweetable": "Week of Mar 30: 9 commits, +9.9k/-2.2k LOC, 13% tests | 6 TODOs crushed, 0 PRs (WIP branch) | 67% AI-assisted | Streak: 3d"
+}
