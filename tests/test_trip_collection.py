@@ -109,13 +109,14 @@ class TestFromArchiveParquets:
         tc = TripCollection.from_archive_parquets(tmp_path)
         assert len(tc) == 2
 
-    def test_v1_parquet_raises(self, tmp_path):
-        """from_archive_parquets raises ValueError when a v1 Parquet is present."""
+    def test_v1_parquet_skipped_with_warning(self, tmp_path):
+        """from_archive_parquets warns+skips a v1 Parquet rather than aborting."""
         df = _make_raw_df()
         df["smooth_speed_kmh"] = 30.0  # v1 marker
         df.to_parquet(tmp_path / "v1.parquet", index=False)
-        with pytest.raises(ValueError, match="processed format"):
-            TripCollection.from_archive_parquets(tmp_path)
+        with pytest.warns(UserWarning, match="processed format"):
+            tc = TripCollection.from_archive_parquets(tmp_path)
+        assert len(tc) == 0
 
     def test_custom_config_applied(self, tmp_path):
         """ProcessingConfig is forwarded to OBDFile.to_trip."""
@@ -195,16 +196,17 @@ class TestDuckDBCatalog:
             ).fetchall()]
         assert "config_hash" in cols
 
-    def test_stale_parquet_path_raises_at_load(self, tmp_path):
-        """from_duckdb_catalog raises when the archive Parquet has been deleted."""
+    def test_stale_parquet_path_warns_at_load(self, tmp_path):
+        """from_duckdb_catalog warns+skips trips whose archive Parquet is gone."""
         p = tmp_path / "trip.parquet"
         _write_archive(p)
         tc = TripCollection.from_archive_parquets(tmp_path)
         db = tmp_path / "catalog.db"
         tc.to_duckdb_catalog(db)
         p.unlink()  # delete archive after catalog is written
-        with pytest.raises((FileNotFoundError, ValueError)):
-            TripCollection.from_duckdb_catalog(db)
+        with pytest.warns(UserWarning, match="cannot load"):
+            loaded = TripCollection.from_duckdb_catalog(db)
+        assert len(loaded) == 0
 
 
 # ── similarity_scores / find_representative ───────────────────────────────────

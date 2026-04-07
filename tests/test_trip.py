@@ -648,11 +648,11 @@ class TestTripCollectionDuckDB:
         tc = TripCollection.from_duckdb_catalog(db)
         assert len(tc) == 0
 
-    def test_stale_parquet_path_raises_at_load(self, tmp_path):
-        """FileNotFoundError raised at catalog load time when archive parquet is gone.
+    def test_stale_parquet_path_warns_at_load(self, tmp_path):
+        """from_duckdb_catalog warns+skips when the archive parquet is gone.
 
-        Eager loading means the error surfaces in from_duckdb_catalog(), not lazily
-        on first metrics access.
+        Eager loading means the warning surfaces in from_duckdb_catalog(), not lazily
+        on first metrics access. The collection is returned with zero trips.
         """
         archive_dir = tmp_path / "archive"
         archive_dir.mkdir()
@@ -664,8 +664,9 @@ class TestTripCollectionDuckDB:
         # Delete the archive to simulate stale catalog entry
         archive_path.unlink()
 
-        with pytest.raises(FileNotFoundError):
-            TripCollection.from_duckdb_catalog(db)
+        with pytest.warns(UserWarning, match="cannot load"):
+            loaded = TripCollection.from_duckdb_catalog(db)
+        assert len(loaded) == 0
 
     def test_max_velocity_populated(self, tmp_path):
         """max_velocity_kmh is stored (not NULL) for trips with speed_ms column."""

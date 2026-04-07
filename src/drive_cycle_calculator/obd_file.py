@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import csv
-import io
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -275,7 +275,7 @@ class OBDFile:
             )
 
         processed_df = config.apply(self.curated_df)
-        return Trip(df=processed_df, name=self.name)
+        return Trip(df=processed_df, name=self.name, stop_threshold_kmh=config.stop_threshold_kmh)
 
 
 # ── Module-level helpers ──────────────────────────────────────────────────────
@@ -349,7 +349,6 @@ def _infer_decimal(path: Path, sep: str) -> str:
     except Exception:
         return "."
 
-    import re
     _decimal_comma = re.compile(r"^\s*-?\d+,\d+\s*$")
 
     for col in preview.columns:

@@ -57,7 +57,10 @@ class ProcessingConfig:
             window=self.window, center=True, min_periods=self.window
         ).mean()
         # acc_ms2 is the full signed acceleration (m/s²), not split into pos/neg.
-        acc_ms2 = (smooth_speed / 3.6).diff()
+        # Divide by the actual inter-sample interval so the result is in m/s²
+        # regardless of OBD polling rate (Torque samples are NOT guaranteed 1 Hz).
+        dt = elapsed_s.diff()  # seconds between consecutive samples
+        acc_ms2 = (smooth_speed / 3.6).diff() / dt
 
         passthrough = curated_df.rename(columns=OBD_COLUMN_MAP)
 

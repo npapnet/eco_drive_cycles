@@ -28,9 +28,15 @@ class Trip:
         Sheet / session name, e.g. '2025-05-14_Morning'.
     """
 
-    def __init__(self, df: pd.DataFrame | None = None, name: str = "") -> None:
+    def __init__(
+        self,
+        df: pd.DataFrame | None = None,
+        name: str = "",
+        stop_threshold_kmh: float = 2.0,
+    ) -> None:
         self.__df = df
         self.name = name
+        self.stop_threshold_kmh = stop_threshold_kmh
         self._path: Path | None = None  # set by from_duckdb_catalog() for lazy loading
 
     @property
@@ -72,7 +78,7 @@ class Trip:
         Keys: duration, mean_speed, mean_ns, stops, stop_pct, mean_acc, mean_dec.
         Missing source columns return NaN rather than raising.
         """
-        return _compute_session_metrics(self._df)
+        return _compute_session_metrics(self._df, self.stop_threshold_kmh)
 
     @cached_property
     def duration(self) -> float:

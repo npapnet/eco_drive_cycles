@@ -15,7 +15,6 @@ At the end, print a summary: N archived, M skipped.
 from __future__ import annotations
 
 import sys
-import warnings
 from pathlib import Path
 
 
