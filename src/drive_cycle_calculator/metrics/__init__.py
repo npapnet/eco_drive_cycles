@@ -17,7 +17,8 @@ from drive_cycle_calculator.metrics._computations import (
     find_representative_sheet,
     similarity,
 )
-from drive_cycle_calculator.metrics.trip import Trip, TripCollection
+from drive_cycle_calculator.metrics.trip import Trip
+from drive_cycle_calculator.metrics.trip_collection import TripCollection
 
 __all__ = [
     "Trip",

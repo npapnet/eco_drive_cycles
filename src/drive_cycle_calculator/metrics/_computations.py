@@ -36,17 +36,20 @@ _SEVEN_METRIC_KEYS = (
     "mean_dec",
 )
 
-# Maps Greek column names (from raw xlsx / calculations-log) to English package API names.
+# Maps Greek DriveGUI column names (from calculations-log xlsx) to English package names.
 # Applied at both entry points: _process_raw_df() and TripCollection.from_excel().
-COLUMN_MAP = {
+# NOTE: "Speed (OBD)(km/h)" → "speed_kmh" belongs to OBD_COLUMN_MAP in _schema.py, NOT here.
+GREEK_COLUMN_MAP = {
     "Διάρκεια (sec)": "elapsed_s",
     "Ταχ m/s": "speed_ms",
     "Εξομαλυνση": "smooth_speed_kmh",
     "Εξομάλυνση": "smooth_speed_kmh",   # accent variant
     "Επιταχυνση": "acceleration_ms2",
     "Επιβραδυνση": "deceleration_ms2",
-    "Speed (OBD)(km/h)": "speed_kmh",
 }
+
+# Backward-compat alias — callers that imported COLUMN_MAP keep working.
+COLUMN_MAP = GREEK_COLUMN_MAP
 
 
 def _normalise_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -81,11 +84,13 @@ def _compute_session_metrics(
         else np.nan
     )
 
-    if "speed_ms" in df.columns:
-        speed_ms = pd.to_numeric(df["speed_ms"], errors="coerce").dropna()
+    # Speed: prefer smooth_speed_kmh (new pipeline); fall back to speed_ms (old pipeline).
+    if "smooth_speed_kmh" in df.columns:
+        speed_kmh = pd.to_numeric(df["smooth_speed_kmh"], errors="coerce").dropna()
+    elif "speed_ms" in df.columns:
+        speed_kmh = pd.to_numeric(df["speed_ms"], errors="coerce").dropna() * 3.6
     else:
-        speed_ms = pd.Series(dtype=float)
-    speed_kmh = speed_ms * 3.6
+        speed_kmh = pd.Series(dtype=float)
     mean_speed = float(speed_kmh.mean()) if not speed_kmh.empty else 0.0
 
     moving = speed_kmh[speed_kmh > stop_threshold_kmh]
@@ -95,16 +100,22 @@ def _compute_session_metrics(
     stops = int((speed_kmh <= stop_threshold_kmh).sum())
     stop_pct = (stops / total_rows * 100) if total_rows else 0.0
 
-    mean_acc = (
-        float(pd.to_numeric(df["acceleration_ms2"], errors="coerce").mean())
-        if "acceleration_ms2" in df.columns
-        else np.nan
-    )
-    mean_dec = (
-        float(pd.to_numeric(df["deceleration_ms2"], errors="coerce").mean())
-        if "deceleration_ms2" in df.columns
-        else np.nan
-    )
+    # Acceleration: prefer acc_ms2 (new pipeline); fall back to split columns (old pipeline).
+    if "acc_ms2" in df.columns:
+        acc = pd.to_numeric(df["acc_ms2"], errors="coerce")
+        mean_acc = float(acc.where(acc > 0).mean())
+        mean_dec = float(acc.where(acc < 0).mean())
+    else:
+        mean_acc = (
+            float(pd.to_numeric(df["acceleration_ms2"], errors="coerce").mean())
+            if "acceleration_ms2" in df.columns
+            else np.nan
+        )
+        mean_dec = (
+            float(pd.to_numeric(df["deceleration_ms2"], errors="coerce").mean())
+            if "deceleration_ms2" in df.columns
+            else np.nan
+        )
 
     return dict(
         duration=duration,
