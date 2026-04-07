@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.2.0] - 2026-04-07
+
+### Fixed
+- `ProcessingConfig.apply()`: acceleration (`acc_ms2`) now guards against `dt=0`
+  (duplicate Torque timestamps) and `dt<0` (out-of-order rows). Previously, a
+  duplicate-timestamp pair produced `±inf` in `acc_ms2`, which propagated silently
+  into DuckDB catalog metrics and corrupted similarity scoring.
+- `ProcessingConfig.apply()`: `acc_ms2` was already divided by the real inter-sample
+  interval `dt` (not assumed 1 Hz), but the `dt ≤ 0` edge case was unguarded.
+- `TripCollection.from_archive_parquets()`: exception handling now catches any
+  load failure (including corrupt/truncated Parquet files that raise `ArrowInvalid`),
+  not just `ValueError` from the v1-format check.
+- `TripCollection.from_duckdb_catalog()`: same broadening — corrupt archive Parquets
+  are now warned-and-skipped rather than aborting the full collection load.
+- `TripCollection.from_duckdb_catalog()`: `trip._path` is now set on each loaded
+  `Trip`, so re-saving to a catalog correctly records the archive path.
+- `stop_threshold_kmh` from `ProcessingConfig` is now forwarded through
+  `OBDFile.to_trip()` → `Trip.__init__` → `_compute_session_metrics`, so custom
+  stop thresholds actually affect `stop_pct` and `stops` metrics.
+- Removed dead imports from `trip_collection.py` (`_compute_session_metrics`,
+  `_infer_sheet_name`, `_process_raw_df`) and unused `import io` from `obd_file.py`.
+
+### Changed
+- `TripCollection.to_parquet()` and `TripCollection.from_parquet()` now emit
+  `DeprecationWarning` at call time (in addition to their existing docstring notes).
+  Use `OBDFile.to_parquet()` + `TripCollection.from_archive_parquets()` instead.
+
 ## [0.0.1.0] - 2026-04-07
 
 ### Added
