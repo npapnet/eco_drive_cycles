@@ -245,13 +245,14 @@ def load_raw_df(path: str | Path) -> pd.DataFrame:
     Raises
     ------
     FileNotFoundError
-        If the file does not exist.
-    ValueError
-        If pandas cannot parse the file as an xlsx workbook.
+        If the path does not exist or is a directory, not a file.
+    Exception
+        If pandas/openpyxl cannot parse the file as a valid xlsx workbook
+        (e.g. corrupt file, wrong format).
     """
     path = Path(path)
-    if not path.exists():
-        raise FileNotFoundError(f"File not found: {path}")
+    if not path.is_file():
+        raise FileNotFoundError(f"File not found or not a file: {path}")
     return pd.read_excel(path)
 
 

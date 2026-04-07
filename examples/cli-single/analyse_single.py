@@ -11,6 +11,8 @@ DATADIR = ROOTDIR / 'data'/'trips'
 assert DATADIR.exists(), "Data directory does not exist"
 
 parquet_files = list(DATADIR.glob("*.parquet"))
+if not parquet_files:
+    raise FileNotFoundError(f"No parquet files found in {DATADIR}. Run ingest.py first.")
 
 [print(f.stem) for f in parquet_files]
 
@@ -58,7 +60,10 @@ plt.ylabel("Speed (m/s)")
 # %%
 from drive_cycle_calculator.metrics.trip import Trip
 
-t1 = Trip().from_parquet(FNAME)
+# Load via TripCollection.from_parquet or construct directly after reading df
+# Note: Trip(df, name) requires a processed DataFrame and a name string.
+# This cell is a placeholder — use TripCollection.from_parquet() to load a folder.
+t1 = Trip(df=pd.read_parquet(FNAME), name=FNAME.stem)
 
 
 

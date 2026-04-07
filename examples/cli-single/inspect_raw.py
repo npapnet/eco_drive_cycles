@@ -7,10 +7,10 @@ for diagnosing data-quality issues or understanding what the ingest pipeline
 receives as input.
 
 Usage:
-    python examples/cli/inspect_raw.py <path/to/file.xlsx>
+    python examples/cli-single/inspect_raw.py <path/to/file.xlsx>
 
 Example:
-    python examples/cli/inspect_raw.py raw_data/trackLog-2019-Sep-20_10-49-22.xlsx
+    python examples/cli-single/inspect_raw.py raw_data/trackLog-2019-Sep-20_10-49-22.xlsx
 """
 import sys
 from pathlib import Path
