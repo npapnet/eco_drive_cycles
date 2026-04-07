@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+from dateutil import parser as _dateutil_parser
 
 # Maps raw OBD column names (as exported by Torque) to short English names
 # used in the processed DataFrame produced by ProcessingConfig.apply().
@@ -53,8 +54,7 @@ def _gps_to_duration_seconds(gps_series: pd.Series) -> pd.Series:
         text = text.replace("GMT", "").strip()
         # "Mon Sep 22 10:30:00 +0300 2019" → try dateutil
         try:
-            from dateutil import parser as _du
-            return _du.parse(text)
+            return _dateutil_parser.parse(text)
         except Exception:
             return np.nan
 
