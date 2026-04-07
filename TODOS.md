@@ -1,5 +1,23 @@
 # TODOS
 
+## ~~P1 — OBDFile + ProcessingConfig refactor~~ ✓ DONE
+
+**What:** Two-stage archive pipeline. `OBDFile` wraps a raw OBD xlsx/CSV/Parquet file.
+`ProcessingConfig` (dataclass with `window` and `stop_threshold_kmh`) applies smoothing,
+acceleration derivation, and column renaming via `apply(curated_df)`. `DEFAULT_CONFIG`
+is `ProcessingConfig(window=4)`.
+
+**Shipped:**
+- `src/drive_cycle_calculator/_schema.py` — dependency-free `OBD_COLUMN_MAP`, `CURATED_COLS`, `_gps_to_duration_seconds`
+- `src/drive_cycle_calculator/obd_file.py` — `OBDFile.from_xlsx/from_csv/from_parquet`, `to_parquet` (v2 format), `curated_df`, `quality_report`, `to_trip`
+- `src/drive_cycle_calculator/processing_config.py` — `ProcessingConfig`, `config_hash`, `DEFAULT_CONFIG`
+- `src/drive_cycle_calculator/metrics/trip_collection.py` — `TripCollection` extracted from `trip.py`; adds `from_folder_raw`, `from_archive_parquets`, `from_duckdb_catalog` (eager via OBDFile)
+- `scripts/migrate_to_archive.py` — one-shot xlsx → v2 Parquet converter
+- `examples/cli/ingest.py` — updated for two-stage workflow
+- 74 new tests; 198 total passing
+
+---
+
 ## ~~P2~~ → ~~P1 — Migrate internal column names from Greek to English~~ ✓ DONE
 
 **What:** Rename all Greek column names in the package computation layer to English at
