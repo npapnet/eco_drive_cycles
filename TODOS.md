@@ -11,14 +11,54 @@ code uses English column names. DriveGUI Excel output remains Greek (user-facing
 
 ---
 
-## P1 - Rationalise Parquet Columns.
+## ~~P1 — Rationalise Parquet Columns~~ → subsumed by OBDFile + ProcessingConfig refactor
 
-**What**: The parquet files SEEM to contain essentially duplicated columns. For example, 
-- the  `speed_ms` and `smooth_speed_kmh` contain the same data scaled by 3.6.  
-- The   'acceleration_ms2', 'deceleration_ms2' are essentially subsets of 'a(m/s2)', 
+**Resolved by:** The OBDFile + ProcessingConfig refactor (planned 2026-04-07).
+Archive Parquets store all raw OBD columns (no derived columns). ProcessingConfig.apply()
+produces `smooth_speed_kmh` and `acc_ms2` in-memory only — no redundant persisted columns.
+`speed_ms` (= smooth_speed_kmh/3.6) and `acceleration_ms2`/`deceleration_ms2` (= subsets
+of acc_ms2) are removed from all persisted storage.
 
-**Why**: it's a waste of memory and disk space. Other data can be saved in its place. 
 
+---
+
+## P2 — First-batch data quality audit + future acquisition spec
+
+**What:** Run `scripts/migrate_to_archive.py` against the first batch of raw data
+(Galatas, Stefanakis, Kalyvas, Ladikas) and document which files fail, which columns
+are missing or malformed, and what the spread of issues is per driver. Then define a
+minimum column spec for future data acquisition sessions.
+
+**Why:** The first batch was collected without standardized specs — it's a reconnaissance
+dataset. When future data collection happens (or students collect new data), they should
+receive an explicit list of required Torque columns before starting. Without this, the same
+quality issues will recur with each new batch.
+
+**How to apply:** After the OBDFile + ProcessingConfig refactor lands, run the migration
+script against `raw_data/`. Review the `SKIP` output. Write a `docs/data_acquisition_spec.md`
+listing: required OBD-II channels, expected dtypes, known Torque export quirks (GPS Time
+format, dash placeholders). Reference CURATED_COLS as the minimum viable set.
+
+**Effort:** S (human: ~2 hrs / CC: ~10 min)
+
+**Depends on:** OBDFile + ProcessingConfig refactor must land first (migration script).
+
+---
+
+## P2 — `OBDFile.compare_smoothing(windows=[2, 4, 8])`
+
+**What:** Method on `OBDFile` that applies `ProcessingConfig(window=w)` for each window
+size and returns a DataFrame of key metrics (mean_speed, mean_acc, stop_pct) per window.
+Useful for choosing the right smoothing parameter before committing to a ProcessingConfig.
+
+**Why:** The window=4 default was inherited from the student DriveGUI. No empirical basis.
+Researchers need a quick way to see how metric stability changes with window size.
+
+**Where:** `src/drive_cycle_calculator/obd_file.py`
+
+**Effort:** S (human: ~1 hr / CC: ~10 min)
+
+**Depends on:** OBDFile + ProcessingConfig refactor must land first.
 
 ---
 
