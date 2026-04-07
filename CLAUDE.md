@@ -13,7 +13,7 @@ Raw driving-cycle data (`_data/`) was collected via the Torque app and exported 
 ## Running the Code
 
 ```bash
-# Run the full test suite (198 tests)
+# Run the full test suite (199 tests)
 uv run pytest
 
 # Launch the new GUI example (ingest → catalog → speed profile chart)

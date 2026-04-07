@@ -19,10 +19,7 @@ import pandas as pd
 
 from drive_cycle_calculator.metrics._computations import (
     _SEVEN_METRIC_KEYS,
-    _compute_session_metrics,
-    _infer_sheet_name,
     _normalise_columns,
-    _process_raw_df,
     _similarity,
 )
 from drive_cycle_calculator.metrics.trip import Trip
@@ -185,10 +182,13 @@ class TripCollection:
             raise FileNotFoundError(f"Directory not found: {directory}")
         trips = []
         for parquet_path in sorted(directory.glob("*.parquet")):
-            obd = OBDFile.from_parquet(parquet_path)
-            trip = obd.to_trip(config)
-            trip._path = parquet_path   # so to_duckdb_catalog() knows the archive path
-            trips.append(trip)
+            try:
+                obd = OBDFile.from_parquet(parquet_path)
+                trip = obd.to_trip(config)
+                trip._path = parquet_path   # so to_duckdb_catalog() knows the archive path
+                trips.append(trip)
+            except Exception as exc:
+                warnings.warn(f"Skipping {parquet_path.name}: {exc}", stacklevel=2)
         return cls(trips)
 
     # ── Parquet persistence (legacy — use OBDFile.to_parquet for archives) ────
@@ -213,6 +213,12 @@ class TripCollection:
         FileNotFoundError
             If directory does not exist.
         """
+        warnings.warn(
+            "TripCollection.to_parquet() is deprecated. Use OBDFile.to_parquet() "
+            "to write raw archive Parquets, then from_archive_parquets() to reload.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         directory = Path(directory)
         if not directory.exists():
             raise FileNotFoundError(f"Directory not found: {directory}")
@@ -240,6 +246,12 @@ class TripCollection:
         .. deprecated::
             Use from_archive_parquets() for v2 archive Parquets.
         """
+        warnings.warn(
+            "TripCollection.from_parquet() is deprecated. "
+            "Use TripCollection.from_archive_parquets() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         directory = Path(directory)
         if not directory.exists():
             raise FileNotFoundError(f"Directory not found: {directory}")
@@ -372,8 +384,16 @@ class TripCollection:
         trips = []
         for trip_id, parquet_path in rows:
             if parquet_path:
-                obd = OBDFile.from_parquet(parquet_path)
-                trips.append(obd.to_trip(config))
+                try:
+                    obd = OBDFile.from_parquet(parquet_path)
+                    trip = obd.to_trip(config)
+                    trip._path = Path(parquet_path)
+                    trips.append(trip)
+                except Exception as exc:
+                    warnings.warn(
+                        f"Trip {trip_id!r}: cannot load {parquet_path!r} — {exc}. Skipping.",
+                        stacklevel=2,
+                    )
             else:
                 warnings.warn(
                     f"Trip {trip_id!r} has no parquet_path in catalog — skipping.",
