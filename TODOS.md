@@ -11,6 +11,17 @@ code uses English column names. DriveGUI Excel output remains Greek (user-facing
 
 ---
 
+## P1 - Rationalise Parquet Columns.
+
+**What**: The parquet files SEEM to contain essentially duplicated columns. For example, 
+- the  `speed_ms` and `smooth_speed_kmh` contain the same data scaled by 3.6.  
+- The   'acceleration_ms2', 'deceleration_ms2' are essentially subsets of 'a(m/s2)', 
+
+**Why**: it's a waste of memory and disk space. Other data can be saved in its place. 
+
+
+---
+
 ## P2 — Fix stop_percentage unit-detection heuristic
 
 **What:** Both `stop_percentage.py` and `total_stop_percentage.py` have:
