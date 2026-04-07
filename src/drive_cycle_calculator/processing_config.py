@@ -60,6 +60,9 @@ class ProcessingConfig:
         # Divide by the actual inter-sample interval so the result is in m/s²
         # regardless of OBD polling rate (Torque samples are NOT guaranteed 1 Hz).
         dt = elapsed_s.diff()  # seconds between consecutive samples
+        # Guard: dt=0 (duplicate timestamps) or dt<0 (out-of-order rows) produce
+        # ±inf without this mask.  Treat them as NaN so downstream stats stay finite.
+        dt = dt.where(dt > 0)
         acc_ms2 = (smooth_speed / 3.6).diff() / dt
 
         passthrough = curated_df.rename(columns=OBD_COLUMN_MAP)

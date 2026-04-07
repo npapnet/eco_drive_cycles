@@ -187,7 +187,7 @@ class TripCollection:
                 trip = obd.to_trip(config)
                 trip._path = parquet_path   # so to_duckdb_catalog() knows the archive path
                 trips.append(trip)
-            except ValueError as exc:
+            except Exception as exc:
                 warnings.warn(f"Skipping {parquet_path.name}: {exc}", stacklevel=2)
         return cls(trips)
 
@@ -389,7 +389,7 @@ class TripCollection:
                     trip = obd.to_trip(config)
                     trip._path = Path(parquet_path)
                     trips.append(trip)
-                except (FileNotFoundError, ValueError) as exc:
+                except Exception as exc:
                     warnings.warn(
                         f"Trip {trip_id!r}: cannot load {parquet_path!r} — {exc}. Skipping.",
                         stacklevel=2,
