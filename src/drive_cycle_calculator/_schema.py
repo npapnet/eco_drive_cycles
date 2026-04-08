@@ -35,6 +35,8 @@ CURATED_COLS: list[str] = [
 def _gps_to_duration_seconds(gps_series: pd.Series) -> pd.Series:
     """Convert a GPS Time series to elapsed seconds from the first valid timestamp.
 
+    This is more specific to the Torque export Format
+
     Handles the Torque export format: timestamps like
     'Mon Sep 22 10:30:00 +0300 2019', with an optional stray A2 header row.
 

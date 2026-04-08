@@ -43,7 +43,7 @@ GREEK_COLUMN_MAP = {
     "Διάρκεια (sec)": "elapsed_s",
     "Ταχ m/s": "speed_ms",
     "Εξομαλυνση": "smooth_speed_kmh",
-    "Εξομάλυνση": "smooth_speed_kmh",   # accent variant
+    "Εξομάλυνση": "smooth_speed_kmh",  # accent variant
     "Επιταχυνση": "acceleration_ms2",
     "Επιβραδυνση": "deceleration_ms2",
 }
@@ -59,6 +59,7 @@ def _normalise_columns(df: pd.DataFrame) -> pd.DataFrame:
     """
     return df.rename(columns=COLUMN_MAP)
 
+
 _REQUIRED_RAW_COLS = [
     "GPS Time",
     "Speed (OBD)(km/h)",
@@ -68,9 +69,7 @@ _REQUIRED_RAW_COLS = [
 ]
 
 
-def _compute_session_metrics(
-    df: pd.DataFrame, stop_threshold_kmh: float = 2.0
-) -> dict:
+def _compute_session_metrics(df: pd.DataFrame, stop_threshold_kmh: float = 2.0) -> dict:
     """Compute the 7 representative-route metrics for a single processed DataFrame.
 
     Returns a dict with keys: duration, mean_speed, mean_ns, stops, stop_pct,
@@ -78,11 +77,7 @@ def _compute_session_metrics(
 
     Missing columns return NaN rather than raising.
     """
-    duration = (
-        float(df["elapsed_s"].dropna().max())
-        if "elapsed_s" in df.columns
-        else np.nan
-    )
+    duration = float(df["elapsed_s"].dropna().max()) if "elapsed_s" in df.columns else np.nan
 
     # Speed: prefer smooth_speed_kmh (new pipeline); fall back to speed_ms (old pipeline).
     if "smooth_speed_kmh" in df.columns:
@@ -141,7 +136,12 @@ def _similarity(overall_val: float, rep_val: float) -> float:
 
 
 def _gps_to_duration_seconds(gps_series: pd.Series) -> pd.Series:
-    """Convert GPS Time column to elapsed seconds from the first valid record."""
+    """Convert GPS Time column to elapsed seconds from the first valid record.
+
+    This is a more general purpose for clean data (compared to the _schema.py)
+
+
+    """
     numeric = pd.to_numeric(gps_series, errors="coerce")
     if numeric.notna().any():
         first_value = numeric.dropna().iloc[0]
@@ -191,17 +191,24 @@ def _process_raw_df(df_raw: pd.DataFrame) -> pd.DataFrame:
     def _to_float(series: pd.Series) -> pd.Series:
         return pd.to_numeric(series, errors="coerce")
 
-    return pd.DataFrame(OrderedDict([
-        ("elapsed_s", duration),
-        ("CO\u2082 in g/km (Average)(g/km)", _to_float(df_raw["CO\u2082 in g/km (Average)(g/km)"])),
-        ("Engine Load(%)", _to_float(df_raw["Engine Load(%)"])),
-        ("Fuel flow rate/hour(l/hr)", _to_float(df_raw["Fuel flow rate/hour(l/hr)"])),
-        ("smooth_speed_kmh", derived["smooth_speed"]),
-        ("speed_ms", derived["speed_ms"]),
-        ("a(m/s2)", derived["acceleration"]),
-        ("acceleration_ms2", derived["pos_acc"]),
-        ("deceleration_ms2", derived["neg_acc"]),
-    ]))
+    return pd.DataFrame(
+        OrderedDict(
+            [
+                ("elapsed_s", duration),
+                (
+                    "CO\u2082 in g/km (Average)(g/km)",
+                    _to_float(df_raw["CO\u2082 in g/km (Average)(g/km)"]),
+                ),
+                ("Engine Load(%)", _to_float(df_raw["Engine Load(%)"])),
+                ("Fuel flow rate/hour(l/hr)", _to_float(df_raw["Fuel flow rate/hour(l/hr)"])),
+                ("smooth_speed_kmh", derived["smooth_speed"]),
+                ("speed_ms", derived["speed_ms"]),
+                ("a(m/s2)", derived["acceleration"]),
+                ("acceleration_ms2", derived["pos_acc"]),
+                ("deceleration_ms2", derived["neg_acc"]),
+            ]
+        )
+    )
 
 
 def _infer_sheet_name(df_raw: pd.DataFrame, xlsx_path: Path) -> str:
@@ -273,6 +280,7 @@ def load_raw_df(path: str | Path) -> pd.DataFrame:
 #     Exported via metrics/__init__.py so existing tests keep working.
 # ────────────────────────────────────────────────────────────────────────────
 
+
 def _split_sheet_name(sheet_name: str) -> tuple[str, str]:
     parts = (sheet_name.split("_", 1) + ["Unknown"])[:2]
     return parts[0], parts[1]
@@ -291,9 +299,7 @@ def compute_average_speed(sheets: dict) -> dict:
     return means
 
 
-def compute_average_speed_without_stops(
-    sheets: dict, stop_threshold_kmh: float = 2.0
-) -> dict:
+def compute_average_speed_without_stops(sheets: dict, stop_threshold_kmh: float = 2.0) -> dict:
     """Mean speed (km/h) excluding stop samples, per date and session."""
     means: dict = {}
     for sheet_name, df in sheets.items():
@@ -351,9 +357,7 @@ def compute_average_deceleration(sheets: dict) -> dict:
     return means
 
 
-def compute_stop_percentage(
-    sheets: dict, stop_threshold_kmh: float = 2.0
-) -> dict:
+def compute_stop_percentage(sheets: dict, stop_threshold_kmh: float = 2.0) -> dict:
     """Stop percentage per date and session.
 
     NOTE: Contains a pre-existing unit-detection heuristic — see TODOS.md.
@@ -365,25 +369,19 @@ def compute_stop_percentage(
         if not speeds.empty and speeds.max() < stop_threshold_kmh:
             speeds = speeds * 3.6
         pct_stop = (
-            (speeds.le(stop_threshold_kmh).sum() / len(speeds)) * 100
-            if not speeds.empty
-            else 0.0
+            (speeds.le(stop_threshold_kmh).sum() / len(speeds)) * 100 if not speeds.empty else 0.0
         )
         date_str, session = _split_sheet_name(sheet_name)
         percentages.setdefault(date_str, {})[session] = pct_stop
     return percentages
 
 
-def compute_number_of_stops(
-    sheets: dict, stop_threshold_kmh: float = 2.0
-) -> dict:
+def compute_number_of_stops(sheets: dict, stop_threshold_kmh: float = 2.0) -> dict:
     """Number of stop events (moving→stopped transitions) per date and session."""
     stop_counts: dict = {}
     smoothed_col = "Εξομαλυνση"
     for sheet_name, df in sheets.items():
-        speeds = (
-            df[smoothed_col] if smoothed_col in df.columns else df.iloc[:, 1]
-        )
+        speeds = df[smoothed_col] if smoothed_col in df.columns else df.iloc[:, 1]
         speeds = pd.to_numeric(speeds, errors="coerce").dropna()
         was_moving = False
         events = 0
@@ -409,9 +407,7 @@ def compute_total_stop_percentage(
     total_samples = 0
     stop_samples = 0
     for df in sheets.values():
-        speeds = (
-            df["Εξομαλυνση"] if "Εξομαλυνση" in df.columns else df.iloc[:, 1]
-        ).dropna()
+        speeds = (df["Εξομαλυνση"] if "Εξομαλυνση" in df.columns else df.iloc[:, 1]).dropna()
         if speeds.empty:
             continue
         if speeds.max() < stop_threshold_kmh:
@@ -478,6 +474,7 @@ def compute_speed_profile(
     Returns (sheet_name, duration_sec, smoothed_speed_kmh).
     Raises RuntimeError if no suitable data is found.
     """
+
     def _metrics(df: pd.DataFrame) -> dict:
         col = df.get("Ταχ m/s")
         if col is None:
@@ -523,9 +520,7 @@ def compute_speed_profile(
     return best, x.iloc[:n], y.iloc[:n]
 
 
-def compute_session_metrics(
-    df: pd.DataFrame, stop_threshold_kmh: float = 2.0
-) -> dict:
+def compute_session_metrics(df: pd.DataFrame, stop_threshold_kmh: float = 2.0) -> dict:
     """Public alias for _compute_session_metrics. See that function for details."""
     return _compute_session_metrics(df, stop_threshold_kmh)
 
@@ -535,9 +530,7 @@ def similarity(overall_val: float, rep_val: float) -> float:
     return _similarity(overall_val, rep_val)
 
 
-def find_representative_sheet(
-    sheets: dict, stop_threshold_kmh: float = 2.0
-) -> tuple[str, float]:
+def find_representative_sheet(sheets: dict, stop_threshold_kmh: float = 2.0) -> tuple[str, float]:
     """Return (best_sheet_name, mean_similarity_score).
 
     Raises ValueError if sheets is empty.
@@ -546,15 +539,11 @@ def find_representative_sheet(
         raise ValueError("No data sheets to compare")
 
     per_sheet = {
-        name: _compute_session_metrics(df, stop_threshold_kmh)
-        for name, df in sheets.items()
+        name: _compute_session_metrics(df, stop_threshold_kmh) for name, df in sheets.items()
     }
 
     first_keys = list(per_sheet[next(iter(per_sheet))].keys())
-    overall = {
-        key: float(np.nanmean([m[key] for m in per_sheet.values()]))
-        for key in first_keys
-    }
+    overall = {key: float(np.nanmean([m[key] for m in per_sheet.values()])) for key in first_keys}
 
     best_sheet, best_score = None, -1.0
     for name, metrics in per_sheet.items():
