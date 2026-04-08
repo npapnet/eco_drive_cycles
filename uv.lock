@@ -438,6 +438,7 @@ version = "0.1.0"
 source = { virtual = "src" }
 dependencies = [
     { name = "duckdb" },
+    { name = "ipykernel" },
     { name = "numpy" },
     { name = "openpyxl" },
     { name = "pandas" },
@@ -447,6 +448,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "duckdb", specifier = ">=0.10" },
+    { name = "ipykernel", specifier = ">=7.2.0" },
     { name = "numpy", specifier = ">=1.24" },
     { name = "openpyxl", specifier = ">=3.1" },
     { name = "pandas", specifier = ">=2.0" },

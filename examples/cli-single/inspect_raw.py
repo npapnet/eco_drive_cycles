@@ -1,3 +1,4 @@
+# %%[markdown]
 """
 Inspect a raw OBD xlsx file before any processing.
 
@@ -12,16 +13,35 @@ Usage:
 Example:
     python examples/cli-single/inspect_raw.py raw_data/trackLog-2019-Sep-20_10-49-22.xlsx
 """
+
+# %%
 import sys
 from pathlib import Path
 
 from drive_cycle_calculator.metrics import load_raw_df
 
+# %%
+
 if len(sys.argv) < 2:
+    # Requires at least one argument
     print("Usage: python examples/cli/inspect_raw.py <path/to/file.xlsx>")
     sys.exit(1)
+else:
+    path = Path(sys.argv[1])
 
-path = Path(sys.argv[1])
+# %% For use with interactive system
+ROOTDIR = Path(__file__).parents[2]
+DATADIR = ROOTDIR / "raw_data"
+assert DATADIR.exists()
+
+# find all xlsx files in DATADIR
+xlsx_files = list(DATADIR.glob("*.xlsx"))
+assert len(xlsx_files) > 0
+
+# pick one file
+path = xlsx_files[0]
+# %%
+
 print(f"Loading raw file: {path}\n")
 
 df = load_raw_df(path)
@@ -34,15 +54,30 @@ for col in df.columns:
     # Count how many are the Torque "-" placeholder
     n_dash = (df[col] == "-").sum() if df[col].dtype == object else 0
     dash_note = f"  ({n_dash} sensor-off '-')" if n_dash else ""
-    print(f"  {col!r:50s}  dtype={str(df[col].dtype):8s}  non-null={n_non_null}/{len(df)}{dash_note}")
+    print(
+        f"  {col!r:50s}  dtype={str(df[col].dtype):8s}  non-null={n_non_null}/{len(df)}{dash_note}"
+    )
 
 print("\n── First 5 rows (key OBD columns) ──────────────────────────────────────")
-key_cols = [c for c in df.columns if any(k in c for k in [
-    "GPS Time", "Speed (OBD)", "CO", "Engine Load", "Fuel flow",
-])]
+key_cols = [
+    c
+    for c in df.columns
+    if any(
+        k in c
+        for k in [
+            "GPS Time",
+            "Speed (OBD)",
+            "CO",
+            "Engine Load",
+            "Fuel flow",
+        ]
+    )
+]
 print(df[key_cols].head(5).to_string())
 
 print("\n── Sample unique values per key column ─────────────────────────────────")
 for col in key_cols:
     sample = df[col].dropna().unique()[:5].tolist()
     print(f"  {col!r}: {sample}")
+
+# %%
