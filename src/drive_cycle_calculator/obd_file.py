@@ -190,6 +190,7 @@ class OBDFile:
         columns_for_dict = [
             col for col in table.column_names if col not in ["GPS Time", " Device Time"]
         ]
+        # use columns_for_dict = False for best compression results
 
         pq.write_table(
             table,

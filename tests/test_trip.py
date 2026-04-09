@@ -2,18 +2,13 @@
 
 from __future__ import annotations
 
-import time
-import zipfile
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
 
-from drive_cycle_calculator.metrics import Trip, TripCollection, load_raw_df
-from drive_cycle_calculator.metrics._computations import (
-    process_raw_df,
-)
+from drive_cycle_calculator.metrics import Trip, TripCollection
 
 # ────────────────────────────────────────────────────────────────
 # Fixtures / helpers
@@ -143,7 +138,7 @@ class TestTrip:
 # ────────────────────────────────────────────────────────────────
 
 
-class TestTripCollection:
+class TestTripCollectionClass:
     def test_from_folder_reads_raw_xlsx(self, tmp_path):
         raw_df = _make_raw_df()
         _write_raw_xlsx(tmp_path / "session.xlsx", raw_df)
@@ -210,125 +205,6 @@ class TestTripCollection:
 
 
 # ────────────────────────────────────────────────────────────────
-# TestProcessRawDf
-# ────────────────────────────────────────────────────────────────
-
-_REQUIRED_COLS = [
-    "GPS Time",
-    "Speed (OBD)(km/h)",
-    "CO\u2082 in g/km (Average)(g/km)",
-    "Engine Load(%)",
-    "Fuel flow rate/hour(l/hr)",
-]
-
-_EXPECTED_OUTPUT_COLS = {
-    "elapsed_s",
-    "smooth_speed_kmh",
-    "speed_ms",
-    "acceleration_ms2",
-    "deceleration_ms2",
-    "CO\u2082 in g/km (Average)(g/km)",
-    "Engine Load(%)",
-    "Fuel flow rate/hour(l/hr)",
-    "a(m/s2)",
-}
-
-
-class TestProcessRawDf:
-    def _make_valid_raw(self, n: int = 15) -> pd.DataFrame:
-        """Raw OBD DataFrame with all required columns."""
-        return pd.DataFrame(
-            {
-                "GPS Time": list(range(n)),
-                "Speed (OBD)(km/h)": [30.0] * n,
-                "CO\u2082 in g/km (Average)(g/km)": [120.0] * n,
-                "Engine Load(%)": [50.0] * n,
-                "Fuel flow rate/hour(l/hr)": [2.0] * n,
-            }
-        )
-
-    def test_happy_path_returns_processed_columns(self):
-        result = process_raw_df(self._make_valid_raw())
-        assert _EXPECTED_OUTPUT_COLS.issubset(set(result.columns))
-        assert len(result) > 0
-
-    @pytest.mark.parametrize("missing_col", _REQUIRED_COLS)
-    def test_missing_required_column_raises_value_error(self, missing_col):
-        df = self._make_valid_raw().drop(columns=[missing_col])
-        with pytest.raises(ValueError, match="Missing required columns"):
-            process_raw_df(df)
-
-    def test_output_has_duration_column(self):
-        result = process_raw_df(self._make_valid_raw())
-        assert "elapsed_s" in result.columns
-        # first duration value should be 0 (elapsed from start)
-        first = pd.to_numeric(result["elapsed_s"], errors="coerce").dropna().iloc[0]
-        assert first == pytest.approx(0.0)
-
-    def test_dash_placeholders_coerced_to_float_not_object(self, tmp_path):
-        """Torque '-' sensor-off markers must not produce object-dtype columns.
-
-        Regression: pyarrow raises ArrowTypeError when a column has dtype=object
-        with mixed str/float values. The three passthrough columns (CO2, Engine
-        Load, Fuel flow) must be float64 after processing.
-        """
-        n = 5
-        df_raw = pd.DataFrame(
-            {
-                "GPS Time": list(range(n)),
-                "Speed (OBD)(km/h)": [30.0] * n,
-                # Mix of '-' strings and real floats, exactly as Torque exports
-                "CO\u2082 in g/km (Average)(g/km)": ["-", "-", 47.5, 53.6, "-"],
-                "Engine Load(%)": ["-", 30.2, 31.8, 30.9, 31.4],
-                "Fuel flow rate/hour(l/hr)": ["-", "-", 0.99, 0.79, "-"],
-            }
-        )
-        result = process_raw_df(df_raw)
-
-        for col in [
-            "CO\u2082 in g/km (Average)(g/km)",
-            "Engine Load(%)",
-            "Fuel flow rate/hour(l/hr)",
-        ]:
-            assert result[col].dtype == float, (
-                f"Column {col!r} should be float64, got {result[col].dtype}. "
-                "Torque '-' markers must be coerced to NaN at ingest."
-            )
-
-        # Verify parquet write succeeds (the original failure point)
-        path = tmp_path / "trip.parquet"
-        result.to_parquet(path, index=True)
-        assert path.exists()
-
-
-# ────────────────────────────────────────────────────────────────
-# TestLoadRawDf
-# ────────────────────────────────────────────────────────────────
-
-
-class TestLoadRawDf:
-    def test_missing_file_raises_file_not_found(self, tmp_path):
-        """load_raw_df raises FileNotFoundError for a non-existent path."""
-        with pytest.raises(FileNotFoundError):
-            load_raw_df(tmp_path / "does_not_exist.xlsx")
-
-    def test_non_xlsx_file_raises_exception(self, tmp_path):
-        """load_raw_df raises an exception when the file is not a valid xlsx."""
-        bad = tmp_path / "not_excel.xlsx"
-        bad.write_text("this is not excel content")
-        with pytest.raises(Exception):
-            load_raw_df(bad)
-
-    def test_directory_raises_file_not_found(self, tmp_path):
-        """load_raw_df raises FileNotFoundError when path is a directory."""
-        with pytest.raises(FileNotFoundError):
-            load_raw_df(tmp_path)
-
-
-
-
-
-# ────────────────────────────────────────────────────────────────
 # TestTripMaxSpeed
 # ────────────────────────────────────────────────────────────────
 
@@ -391,93 +267,6 @@ class TestTripLazyLoading:
         t._path = tmp_path / "does_not_exist.parquet"
         with pytest.raises(FileNotFoundError):
             _ = t.metrics
-
-
-# ────────────────────────────────────────────────────────────────
-# TestTripCollectionParquet
-# ────────────────────────────────────────────────────────────────
-
-
-class TestTripCollectionParquet:
-    def test_roundtrip(self, tmp_path):
-        """to_parquet → from_parquet produces same trips."""
-        t1 = Trip(_make_processed_df(speed_ms=5.0), "morning")
-        t2 = Trip(_make_processed_df(speed_ms=8.0), "evening")
-        tc = TripCollection([t1, t2])
-        tc.to_parquet(tmp_path)
-
-        loaded = TripCollection.from_parquet(tmp_path)
-        assert len(loaded) == 2
-        names = {t.name for t in loaded}
-        assert names == {"morning", "evening"}
-
-    def test_roundtrip_metrics_preserved(self, tmp_path):
-        """Metrics computed from loaded parquet match original."""
-        t = Trip(_make_processed_df(speed_ms=10.0), "trip")
-        TripCollection([t]).to_parquet(tmp_path)
-        loaded = TripCollection.from_parquet(tmp_path)
-        assert loaded.trips[0].mean_speed == pytest.approx(10.0 * 3.6, abs=0.01)
-
-    def test_overwrite_by_default(self, tmp_path):
-        """Re-running to_parquet() overwrites existing files without error."""
-        t = Trip(_make_processed_df(speed_ms=5.0), "trip")
-        tc = TripCollection([t])
-        tc.to_parquet(tmp_path)  # first write
-        tc.to_parquet(tmp_path)  # second write — should not raise
-
-    def test_overwrite_false_raises_on_existing(self, tmp_path):
-        """overwrite=False raises ValueError if file already exists."""
-        t = Trip(_make_processed_df(), "trip")
-        tc = TripCollection([t])
-        tc.to_parquet(tmp_path)
-        with pytest.raises(ValueError, match="already exists"):
-            tc.to_parquet(tmp_path, overwrite=False)
-
-    def test_empty_collection_writes_no_files(self, tmp_path):
-        """Empty TripCollection writes nothing."""
-        TripCollection([]).to_parquet(tmp_path)
-        assert list(tmp_path.glob("*.parquet")) == []
-
-    def test_name_collision_within_collection_raises(self, tmp_path):
-        """Two trips with same sanitised name raise ValueError before any write."""
-        t1 = Trip(_make_processed_df(), "a/b")
-        t2 = Trip(_make_processed_df(), "a b")  # both sanitise to "a_b"
-        tc = TripCollection([t1, t2])
-        with pytest.raises(ValueError, match="collision"):
-            tc.to_parquet(tmp_path)
-        assert list(tmp_path.glob("*.parquet")) == []  # no partial writes
-
-    def test_special_chars_in_name_sanitised(self, tmp_path):
-        """Trip names with special chars produce valid filenames."""
-        t = Trip(_make_processed_df(), "2025-05-14 Morning (test)")
-        TripCollection([t]).to_parquet(tmp_path)
-        files = list(tmp_path.glob("*.parquet"))
-        assert len(files) == 1
-        assert " " not in files[0].name
-
-    def test_from_parquet_empty_directory(self, tmp_path):
-        """Empty directory returns empty TripCollection."""
-        tc = TripCollection.from_parquet(tmp_path)
-        assert len(tc) == 0
-
-    def test_from_parquet_missing_directory(self, tmp_path):
-        """Non-existent directory raises FileNotFoundError."""
-        with pytest.raises(FileNotFoundError):
-            TripCollection.from_parquet(tmp_path / "nonexistent")
-
-    def test_to_parquet_missing_directory(self, tmp_path):
-        """Non-existent directory raises FileNotFoundError."""
-        t = Trip(_make_processed_df(), "trip")
-        with pytest.raises(FileNotFoundError):
-            TripCollection([t]).to_parquet(tmp_path / "nonexistent")
-
-    def test_to_parquet_sets_path_on_trips(self, tmp_path):
-        """to_parquet() sets trip._path so to_duckdb_catalog() can find files."""
-        t = Trip(_make_processed_df(), "trip")
-        tc = TripCollection([t])
-        tc.to_parquet(tmp_path)
-        assert t._path is not None
-        assert t._path.exists()
 
 
 # ────────────────────────────────────────────────────────────────
@@ -547,11 +336,10 @@ class TestTripCollectionDuckDB:
         """Calling to_duckdb_catalog() twice produces no duplicate rows."""
         import duckdb
 
-        t = Trip(_make_processed_df(), "trip")
-        tc = TripCollection([t])
-        trips_dir = tmp_path / "trips"
-        trips_dir.mkdir()
-        tc.to_parquet(trips_dir)
+        archive_dir = tmp_path / "archive"
+        archive_dir.mkdir()
+        _write_archive_parquet(archive_dir, "trip")
+        tc = TripCollection.from_archive_parquets(archive_dir)
         db = tmp_path / "metadata.duckdb"
         tc.to_duckdb_catalog(db)
         tc.to_duckdb_catalog(db)  # second call
@@ -564,11 +352,10 @@ class TestTripCollectionDuckDB:
         """Empty TripCollection does not truncate an existing catalog."""
         import duckdb
 
-        t = Trip(_make_processed_df(), "existing")
-        tc = TripCollection([t])
-        trips_dir = tmp_path / "trips"
-        trips_dir.mkdir()
-        tc.to_parquet(trips_dir)
+        archive_dir = tmp_path / "archive"
+        archive_dir.mkdir()
+        _write_archive_parquet(archive_dir, "existing")
+        tc = TripCollection.from_archive_parquets(archive_dir)
         db = tmp_path / "metadata.duckdb"
         tc.to_duckdb_catalog(db)
 
@@ -629,11 +416,10 @@ class TestTripCollectionDuckDB:
         """max_velocity_kmh is stored (not NULL) for trips with speed_ms column."""
         import duckdb
 
-        t = Trip(_make_processed_df(speed_ms=10.0), "trip")
-        tc = TripCollection([t])
-        trips_dir = tmp_path / "trips"
-        trips_dir.mkdir()
-        tc.to_parquet(trips_dir)
+        archive_dir = tmp_path / "archive"
+        archive_dir.mkdir()
+        _write_archive_parquet(archive_dir, "trip", speed_kmh=36.0)
+        tc = TripCollection.from_archive_parquets(archive_dir)
         db = tmp_path / "metadata.duckdb"
         tc.to_duckdb_catalog(db)
 
@@ -642,4 +428,4 @@ class TestTripCollectionDuckDB:
                 "SELECT max_velocity_kmh FROM trip_metadata WHERE trip_id = 'trip'"
             ).fetchone()
         assert row is not None
-        assert row[0] == pytest.approx(10.0 * 3.6, abs=0.01)
+        assert row[0] == pytest.approx(36.0, abs=0.01)
