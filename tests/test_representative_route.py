@@ -4,13 +4,13 @@ import pandas as pd
 from drive_cycle_calculator.metrics import (
     similarity,
     compute_session_metrics,
-    find_representative_sheet,
 )
 
 
 # ────────────────────────────────────────────────────────────────
 # similarity
 # ────────────────────────────────────────────────────────────────
+
 
 class TestSimilarity:
     def test_perfect_match(self):
@@ -44,17 +44,20 @@ class TestSimilarity:
 # compute_session_metrics
 # ────────────────────────────────────────────────────────────────
 
+
 class TestComputeSessionMetrics:
     def _make_df(self, **kwargs):
         return pd.DataFrame(kwargs)
 
     def test_happy_path(self):
-        df = pd.DataFrame({
-            "elapsed_s": [300.0, 600.0],
-            "speed_ms": [8.0, 9.0],
-            "acceleration_ms2": [0.3, 0.5],
-            "deceleration_ms2": [-0.2, -0.4],
-        })
+        df = pd.DataFrame(
+            {
+                "elapsed_s": [300.0, 600.0],
+                "speed_ms": [8.0, 9.0],
+                "acceleration_ms2": [0.3, 0.5],
+                "deceleration_ms2": [-0.2, -0.4],
+            }
+        )
         result = compute_session_metrics(df, stop_threshold_kmh=2.0)
         assert result["duration"] == pytest.approx(600.0)
         assert result["mean_speed"] == pytest.approx(8.5 * 3.6, abs=0.01)
@@ -79,50 +82,3 @@ class TestComputeSessionMetrics:
         result = compute_session_metrics(df, stop_threshold_kmh=2.0)
         assert result["stop_pct"] == pytest.approx(50.0)
         assert result["stops"] == 2
-
-
-# ────────────────────────────────────────────────────────────────
-# find_representative_sheet
-# ────────────────────────────────────────────────────────────────
-
-class TestFindRepresentativeSheet:
-    def test_empty_dict_raises_value_error(self):
-        with pytest.raises(ValueError, match="No data sheets"):
-            find_representative_sheet({})
-
-    def test_single_sheet_returns_it_with_100(self):
-        df = pd.DataFrame({
-            "elapsed_s": [300.0, 600.0],
-            "speed_ms": [8.0, 9.0],
-            "acceleration_ms2": [0.3, 0.4],
-            "deceleration_ms2": [-0.2, -0.3],
-        })
-        best, score = find_representative_sheet({"2025-05-14_Morning": df})
-        assert best == "2025-05-14_Morning"
-        assert score == pytest.approx(100.0)
-
-    def test_selects_closest_sheet(self):
-        # Morning: metrics in the middle of the distribution → should win
-        # Evening: extreme values far from the average
-        close_df = pd.DataFrame({
-            "elapsed_s": [600.0, 600.0, 600.0],
-            "speed_ms": [10.0, 12.0, 11.0],
-            "acceleration_ms2": [0.5, 0.6, 0.55],
-            "deceleration_ms2": [-0.4, -0.5, -0.45],
-        })
-        far_df = pd.DataFrame({
-            "elapsed_s": [1.0, 1.0, 1.0],
-            "speed_ms": [0.1, 0.1, 0.1],
-            "acceleration_ms2": [0.01, 0.01, 0.01],
-            "deceleration_ms2": [-0.01, -0.01, -0.01],
-        })
-        sheets = {"2025-05-14_Morning": close_df, "2025-05-14_Evening": far_df}
-        best, score = find_representative_sheet(sheets)
-        assert best == "2025-05-14_Morning"
-        assert 0.0 <= score <= 100.0
-
-    def test_score_is_in_valid_range(self):
-        df1 = pd.DataFrame({"speed_ms": [5.0, 10.0], "acceleration_ms2": [0.3, 0.3], "deceleration_ms2": [-0.2, -0.2]})
-        df2 = pd.DataFrame({"speed_ms": [8.0, 12.0], "acceleration_ms2": [0.4, 0.4], "deceleration_ms2": [-0.3, -0.3]})
-        _, score = find_representative_sheet({"a": df1, "b": df2})
-        assert 0.0 <= score <= 100.0

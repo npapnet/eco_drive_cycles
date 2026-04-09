@@ -19,8 +19,8 @@ import pandas as pd
 
 from drive_cycle_calculator.metrics._computations import (
     _SEVEN_METRIC_KEYS,
-    _normalise_columns,
-    _similarity,
+    normalise_columns,
+    similarity,
 )
 from drive_cycle_calculator.metrics.trip import Trip
 
@@ -63,7 +63,7 @@ class TripCollection:
         """
         sheets = pd.read_excel(Path(path), sheet_name=None)
         trips = [
-            Trip(_normalise_columns(df), name)
+            Trip(normalise_columns(df), name)
             for name, df in sheets.items()
             if not df.empty
         ]
@@ -420,7 +420,7 @@ class TripCollection:
         }
         return {
             t.name: float(
-                np.nanmean([_similarity(overall[k], t.metrics[k]) for k in _SEVEN_METRIC_KEYS])
+                np.nanmean([similarity(overall[k], t.metrics[k]) for k in _SEVEN_METRIC_KEYS])
             )
             for t in self.trips
         }

@@ -1,7 +1,7 @@
 import pytest
 import pandas as pd
 import numpy as np
-from drive_cycle_calculator.calculations import gps_to_duration_seconds, smooth_and_derive
+from drive_cycle_calculator.metrics._computations import gps_to_duration_seconds, smooth_and_derive
 
 
 class TestGpsToDurationSeconds:

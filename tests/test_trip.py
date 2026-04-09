@@ -11,8 +11,8 @@ import pytest
 
 from drive_cycle_calculator.metrics import Trip, TripCollection, load_raw_df
 from drive_cycle_calculator.metrics._computations import (
-    _infer_sheet_name,
-    _process_raw_df,
+    infer_sheet_name,
+    process_raw_df,
 )
 
 # ────────────────────────────────────────────────────────────────
@@ -263,7 +263,7 @@ class TestProcessRawDf:
         })
 
     def test_happy_path_returns_processed_columns(self):
-        result = _process_raw_df(self._make_valid_raw())
+        result = process_raw_df(self._make_valid_raw())
         assert _EXPECTED_OUTPUT_COLS.issubset(set(result.columns))
         assert len(result) > 0
 
@@ -271,10 +271,10 @@ class TestProcessRawDf:
     def test_missing_required_column_raises_value_error(self, missing_col):
         df = self._make_valid_raw().drop(columns=[missing_col])
         with pytest.raises(ValueError, match="Missing required columns"):
-            _process_raw_df(df)
+            process_raw_df(df)
 
     def test_output_has_duration_column(self):
-        result = _process_raw_df(self._make_valid_raw())
+        result = process_raw_df(self._make_valid_raw())
         assert "elapsed_s" in result.columns
         # first duration value should be 0 (elapsed from start)
         first = pd.to_numeric(result["elapsed_s"], errors="coerce").dropna().iloc[0]
@@ -296,7 +296,7 @@ class TestProcessRawDf:
             "Engine Load(%)": ["-", 30.2, 31.8, 30.9, 31.4],
             "Fuel flow rate/hour(l/hr)": ["-", "-", 0.99, 0.79, "-"],
         })
-        result = _process_raw_df(df_raw)
+        result = process_raw_df(df_raw)
 
         for col in [
             "CO\u2082 in g/km (Average)(g/km)",
@@ -351,13 +351,13 @@ class TestInferSheetName:
     def test_valid_a2_timestamp_morning(self, tmp_path):
         """Valid A2 timestamp with hour < 12 → Morning."""
         df = self._make_df_with_a2("Mon Sep 22 10:30:00 +0300 2019")
-        name = _infer_sheet_name(df, tmp_path / "f.xlsx")
+        name = infer_sheet_name(df, tmp_path / "f.xlsx")
         assert name == "2019-09-22_Morning"
 
     def test_valid_a2_timestamp_evening(self, tmp_path):
         """Valid A2 timestamp with hour >= 12 → Evening."""
         df = self._make_df_with_a2("Mon Sep 22 18:45:00 +0300 2019")
-        name = _infer_sheet_name(df, tmp_path / "f.xlsx")
+        name = infer_sheet_name(df, tmp_path / "f.xlsx")
         assert name == "2019-09-22_Evening"
 
     def test_invalid_a2_falls_back_to_mtime(self, tmp_path):
@@ -365,7 +365,7 @@ class TestInferSheetName:
         xlsx = tmp_path / "session.xlsx"
         xlsx.write_text("placeholder")
         df = self._make_df_with_a2("this is not a timestamp")
-        name = _infer_sheet_name(df, xlsx)
+        name = infer_sheet_name(df, xlsx)
         # Should be YYYY-MM-DD_Morning or YYYY-MM-DD_Evening
         parts = name.split("_")
         assert len(parts) == 2
@@ -377,7 +377,7 @@ class TestInferSheetName:
     def test_result_within_excel_sheet_name_limit(self, tmp_path):
         """Sheet names must be ≤ 31 characters."""
         df = self._make_df_with_a2("Mon Sep 22 10:30:00 +0300 2019")
-        name = _infer_sheet_name(df, tmp_path / "f.xlsx")
+        name = infer_sheet_name(df, tmp_path / "f.xlsx")
         assert len(name) <= 31
 
 

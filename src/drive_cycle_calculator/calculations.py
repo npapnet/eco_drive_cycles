@@ -14,31 +14,9 @@ from datetime import datetime
 import pandas as pd
 
 from drive_cycle_calculator.metrics._computations import (
-    _gps_to_duration_seconds,
-    _smooth_and_derive,
+    gps_to_duration_seconds,
+    smooth_and_derive,
 )
-
-
-def gps_to_duration_seconds(gps_series: pd.Series) -> pd.Series:
-    """Convert a GPS Time column to seconds elapsed from the first valid record.
-
-    Tries numeric parsing first (values already in seconds), then falls back to
-    datetime parsing. Returns an all-NaN Series if neither succeeds.
-    """
-    return _gps_to_duration_seconds(gps_series)
-
-
-def smooth_and_derive(speed_kmh: pd.Series) -> dict:
-    """Apply rolling smoothing and derive acceleration columns.
-
-    Returns a dict with keys:
-        "smooth_speed" – rolling mean (window=4, center=True, min_periods=4), km/h
-        "speed_ms"     – smooth_speed / 3.6, m/s
-        "acceleration" – speed_ms.diff(), m/s²
-        "pos_acc"      – acceleration where > 0 (NaN elsewhere)
-        "neg_acc"      – acceleration where < 0 (NaN elsewhere)
-    """
-    return _smooth_and_derive(speed_kmh)
 
 
 def run_calculations(folder_path: str, log_folder: str = "log") -> tuple[str, str]:
@@ -95,9 +73,9 @@ def run_calculations(folder_path: str, log_folder: str = "log") -> tuple[str, st
                 text_lines.append(f"{file_name}: missing columns {missing}")
                 continue
 
-            duration = _gps_to_duration_seconds(df["GPS Time"])
+            duration = gps_to_duration_seconds(df["GPS Time"])
             speed_kmh = pd.to_numeric(df["Speed (OBD)(km/h)"], errors="coerce")
-            derived = _smooth_and_derive(speed_kmh)
+            derived = smooth_and_derive(speed_kmh)
 
             processed = OrderedDict([
                 ("Διάρκεια (sec)", duration),
@@ -128,4 +106,4 @@ def run_calculations(folder_path: str, log_folder: str = "log") -> tuple[str, st
     return text_log, excel_log
 
 
-__all__ = ["gps_to_duration_seconds", "smooth_and_derive", "run_calculations"]
+__all__ = ["run_calculations"]
