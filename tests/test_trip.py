@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from drive_cycle_calculator.metrics import Trip, TripCollection, load_raw_df
+from drive_cycle_calculator.metrics import Trip, TripCollection
 from drive_cycle_calculator.metrics._computations import process_raw_df
 
 # ────────────────────────────────────────────────────────────────
@@ -295,30 +295,6 @@ class TestProcessRawDf:
         path = tmp_path / "trip.parquet"
         result.to_parquet(path, index=True)
         assert path.exists()
-
-
-# ────────────────────────────────────────────────────────────────
-# TestLoadRawDf
-# ────────────────────────────────────────────────────────────────
-
-
-class TestLoadRawDf:
-    def test_missing_file_raises_file_not_found(self, tmp_path):
-        """load_raw_df raises FileNotFoundError for a non-existent path."""
-        with pytest.raises(FileNotFoundError):
-            load_raw_df(tmp_path / "does_not_exist.xlsx")
-
-    def test_non_xlsx_file_raises_exception(self, tmp_path):
-        """load_raw_df raises an exception when the file is not a valid xlsx."""
-        bad = tmp_path / "not_excel.xlsx"
-        bad.write_text("this is not excel content")
-        with pytest.raises(Exception):
-            load_raw_df(bad)
-
-    def test_directory_raises_file_not_found(self, tmp_path):
-        """load_raw_df raises FileNotFoundError when path is a directory."""
-        with pytest.raises(FileNotFoundError):
-            load_raw_df(tmp_path)
 
 
 # ────────────────────────────────────────────────────────────────

@@ -112,37 +112,3 @@ def process_raw_df(df_raw: pd.DataFrame) -> pd.DataFrame:
             ]
         )
     )
-
-
-def load_raw_df(path: str | Path) -> pd.DataFrame:
-    """Load a raw OBD xlsx file exactly as Torque exported it — no processing.
-
-    Returns the unmodified DataFrame so callers can inspect column names, dtypes,
-    missing values, and raw sensor readings before any smoothing or derivation.
-
-    Typical use: auditing a file, exploring data quality, comparing with the
-    processed form returned by _process_raw_df().
-
-    Parameters
-    ----------
-    path : str | Path
-        Path to an OBD xlsx file produced by the Torque app.
-
-    Returns
-    -------
-    pd.DataFrame
-        Raw DataFrame, one row per GPS sample. All columns as exported by Torque
-        (dtype object for sensor-off cells like '-').
-
-    Raises
-    ------
-    FileNotFoundError
-        If the path does not exist or is a directory, not a file.
-    Exception
-        If pandas/openpyxl cannot parse the file as a valid xlsx workbook
-        (e.g. corrupt file, wrong format).
-    """
-    path = Path(path)
-    if not path.is_file():
-        raise FileNotFoundError(f"File not found or not a file: {path}")
-    return pd.read_excel(path)

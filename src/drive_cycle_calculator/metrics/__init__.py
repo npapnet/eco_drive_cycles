@@ -1,6 +1,3 @@
-from drive_cycle_calculator.metrics._computations import (
-    load_raw_df,
-)
 from drive_cycle_calculator.metrics._similarity_calcs import similarity
 
 from drive_cycle_calculator.metrics.trip import Trip
@@ -10,5 +7,4 @@ __all__ = [
     "Trip",
     "TripCollection",
     "similarity",
-    "load_raw_df",
 ]
