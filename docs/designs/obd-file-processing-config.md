@@ -325,9 +325,9 @@ tc.to_duckdb_catalog(db_path)
 
 | # | Item | Location |
 |---|------|----------|
-| 1 | `load_raw_df()` and `process_raw_df()` in `_computations.py` are legacy; no new code should call them | `_computations.py` |
-| 2 | `TripCollection.from_parquet()` is deprecated but not yet removed (tests still reference it) | `trip_collection.py` |
-| 3 | `misc._gps_to_duration_seconds()` and `_computations.gps_to_duration_seconds()` are near-duplicates; consolidation deferred | `misc.py`, `_computations.py` |
-| 4 | `OBDFile.to_parquet_optimised()` is incomplete (hardcoded output path, TODO comment) | `obd_file.py` |
-| 5 | `Trip.microtrips` raises `NotImplementedError` — P1 in TODOS.md | `trip.py` |
-| 6 | `misc.py` has no docstring header and functions lack public/private consistency (`_gps_to_duration_seconds` is private-named but used externally) | `misc.py` |
+| 1 | `misc._gps_to_duration_seconds()` and `_computations.gps_to_duration_seconds()` are near-duplicates; consolidation deferred | `misc.py`, `_computations.py` |
+| 2 | `OBDFile.to_parquet_optimised()` is incomplete (hardcoded output path, TODO comment) | `obd_file.py` |
+| 3 | `Trip.microtrips` raises `NotImplementedError` — P1 in TODOS.md | `trip.py` |
+| 4 | `misc.py` has no docstring header and functions lack public/private consistency (`_gps_to_duration_seconds` is private-named but used externally) | `misc.py` |
+
+

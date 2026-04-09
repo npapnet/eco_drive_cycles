@@ -18,7 +18,6 @@ import numpy as np
 import pandas as pd
 
 from drive_cycle_calculator.metrics._computations import _SEVEN_METRIC_KEYS
-from drive_cycle_calculator.metrics._similarity_calcs import similarity
 from drive_cycle_calculator.metrics.trip import Trip
 
 if TYPE_CHECKING:
@@ -169,7 +168,6 @@ class TripCollection:
     def _sanitise_name(name: str) -> str:
         """Replace filesystem-unsafe characters with '_'."""
         return re.sub(r"[^\w\-.]", "_", name)
-
 
     @classmethod
     def from_parquet(cls, directory: str | Path) -> "TripCollection":
@@ -374,3 +372,15 @@ class TripCollection:
 
     def __repr__(self) -> str:
         return f"TripCollection({len(self.trips)} trips)"
+
+
+def similarity(overall_val: float, rep_val: float) -> float:
+    """% similarity between a representative value and the overall mean.
+
+    Returns a value in [0, 100]. Perfect match returns 100.0.
+    """
+    if np.isnan(overall_val):
+        return 0.0
+    if overall_val == 0:
+        return 100.0 if rep_val == 0 else 0.0
+    return max(0.0, 100.0 - abs(rep_val - overall_val) / abs(overall_val) * 100)
