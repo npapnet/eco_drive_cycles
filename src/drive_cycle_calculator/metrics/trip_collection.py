@@ -17,16 +17,22 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
-from drive_cycle_calculator.metrics._computations import (
-    _SEVEN_METRIC_KEYS,
-    _normalise_columns,
-    _similarity,
-)
 from drive_cycle_calculator.metrics.trip import Trip
 
 if TYPE_CHECKING:
     from drive_cycle_calculator.obd_file import OBDFile
     from drive_cycle_calculator.processing_config import ProcessingConfig
+
+
+_SEVEN_METRIC_KEYS = (
+    "duration",
+    "mean_speed",
+    "mean_ns",
+    "stops",
+    "stop_pct",
+    "mean_acc",
+    "mean_dec",
+)
 
 
 class TripCollection:
@@ -45,31 +51,6 @@ class TripCollection:
         self.trips = trips
 
     # ── Constructors ─────────────────────────────────────────────────────────
-
-    @classmethod
-    def from_excel(cls, path: str | Path) -> "TripCollection":
-        """Load from a combined calculations-log xlsx (one sheet per trip).
-
-        The log xlsx is produced by calculations.run_calculations() and already
-        contains processed columns (smoothed speed, acceleration, duration).
-        Empty sheets are silently skipped.
-
-        Raises
-        ------
-        FileNotFoundError
-            If path does not exist.
-        ValueError
-            If the file contains zero valid (non-empty) sheets.
-        """
-        sheets = pd.read_excel(Path(path), sheet_name=None)
-        trips = [
-            Trip(_normalise_columns(df), name)
-            for name, df in sheets.items()
-            if not df.empty
-        ]
-        if not trips:
-            raise ValueError(f"No valid sheets found in {path}")
-        return cls(trips)
 
     @classmethod
     def from_folder(
@@ -185,59 +166,18 @@ class TripCollection:
             try:
                 obd = OBDFile.from_parquet(parquet_path)
                 trip = obd.to_trip(config)
-                trip._path = parquet_path   # so to_duckdb_catalog() knows the archive path
+                trip._path = parquet_path  # so to_duckdb_catalog() knows the archive path
                 trips.append(trip)
             except Exception as exc:
                 warnings.warn(f"Skipping {parquet_path.name}: {exc}", stacklevel=2)
         return cls(trips)
 
-    # ── Parquet persistence (legacy — use OBDFile.to_parquet for archives) ────
+    # ── Parquet helpers ───────────────────────────────────────────────────────
 
     @staticmethod
     def _sanitise_name(name: str) -> str:
         """Replace filesystem-unsafe characters with '_'."""
         return re.sub(r"[^\w\-.]", "_", name)
-
-    def to_parquet(self, directory: str | Path, overwrite: bool = True) -> None:
-        """Write each trip's processed DataFrame as a Parquet file.
-
-        .. deprecated::
-            This method writes processed (derived) DataFrames. For new workflows,
-            use OBDFile.to_parquet() to write raw archive Parquets, then
-            from_archive_parquets() to reload them.
-
-        Raises
-        ------
-        ValueError
-            If two trips produce the same sanitised filename.
-        FileNotFoundError
-            If directory does not exist.
-        """
-        warnings.warn(
-            "TripCollection.to_parquet() is deprecated. Use OBDFile.to_parquet() "
-            "to write raw archive Parquets, then from_archive_parquets() to reload.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        directory = Path(directory)
-        if not directory.exists():
-            raise FileNotFoundError(f"Directory not found: {directory}")
-
-        sanitised = [self._sanitise_name(t.name) for t in self.trips]
-        if len(sanitised) != len(set(sanitised)):
-            from collections import Counter
-            dupes = [n for n, c in Counter(sanitised).items() if c > 1]
-            raise ValueError(
-                f"Name collision after sanitisation: {dupes}. "
-                "Rename source trips before ingesting."
-            )
-
-        for trip, stem in zip(self.trips, sanitised):
-            path = directory / f"{stem}.parquet"
-            if path.exists() and not overwrite:
-                raise ValueError(f"File already exists: {path}. Pass overwrite=True.")
-            trip._df.to_parquet(path, index=True)
-            trip._path = path
 
     @classmethod
     def from_parquet(cls, directory: str | Path) -> "TripCollection":
@@ -315,9 +255,7 @@ class TripCollection:
         with duckdb.connect(str(db_path)) as conn:
             conn.execute(_CREATE)
             # Migrate existing catalogs that lack config_hash column.
-            conn.execute(
-                "ALTER TABLE trip_metadata ADD COLUMN IF NOT EXISTS config_hash VARCHAR"
-            )
+            conn.execute("ALTER TABLE trip_metadata ADD COLUMN IF NOT EXISTS config_hash VARCHAR")
             for trip in self.trips:
                 m = trip.metrics
                 sanitised = self._sanitise_name(trip.name)
@@ -377,9 +315,7 @@ class TripCollection:
             raise FileNotFoundError(f"Catalog not found: {db_path}")
 
         with duckdb.connect(str(db_path), read_only=True) as conn:
-            rows = conn.execute(
-                "SELECT trip_id, parquet_path FROM trip_metadata"
-            ).fetchall()
+            rows = conn.execute("SELECT trip_id, parquet_path FROM trip_metadata").fetchall()
 
         trips = []
         for trip_id, parquet_path in rows:
@@ -414,13 +350,10 @@ class TripCollection:
         if not self.trips:
             raise ValueError("Cannot compute similarity scores: collection is empty.")
         per = {t.name: t.metrics for t in self.trips}
-        overall = {
-            k: float(np.nanmean([m[k] for m in per.values()]))
-            for k in _SEVEN_METRIC_KEYS
-        }
+        overall = {k: float(np.nanmean([m[k] for m in per.values()])) for k in _SEVEN_METRIC_KEYS}
         return {
             t.name: float(
-                np.nanmean([_similarity(overall[k], t.metrics[k]) for k in _SEVEN_METRIC_KEYS])
+                np.nanmean([similarity(overall[k], t.metrics[k]) for k in _SEVEN_METRIC_KEYS])
             )
             for t in self.trips
         }
@@ -434,9 +367,7 @@ class TripCollection:
             If the collection is empty.
         """
         if not self.trips:
-            raise ValueError(
-                "Cannot find representative trip: collection is empty."
-            )
+            raise ValueError("Cannot find representative trip: collection is empty.")
         scores = self.similarity_scores()
         best_name = max(scores, key=scores.__getitem__)
         return next(t for t in self.trips if t.name == best_name)
@@ -451,3 +382,15 @@ class TripCollection:
 
     def __repr__(self) -> str:
         return f"TripCollection({len(self.trips)} trips)"
+
+
+def similarity(overall_val: float, rep_val: float) -> float:
+    """% similarity between a representative value and the overall mean.
+
+    Returns a value in [0, 100]. Perfect match returns 100.0.
+    """
+    if np.isnan(overall_val):
+        return 0.0
+    if overall_val == 0:
+        return 100.0 if rep_val == 0 else 0.0
+    return max(0.0, 100.0 - abs(rep_val - overall_val) / abs(overall_val) * 100)

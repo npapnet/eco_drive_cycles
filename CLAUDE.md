@@ -1,48 +1,47 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) and Antigravity when working with code in this repository.
 
 ## Project Overview
 
-**Fuel EKO Wars** — a telematics system for analyzing OBD-II vehicle data to compute eco-driving scores.
+**Fuel EKO Wars** — a telematics system for analyzing OBD-II vehicle data to compute eco-driving scores and synthesize representative drive cycles.
 
-This repo is a **knowledge base**, not a product repo. Its primary purpose is to consolidate, understand, and refine early-stage student work related to the Fuel Eco Wars concept. The student contributions (mainly `students/DriveGUI/`) represent a first working prototype that needs significant refinement before it can serve as a reliable foundation for further development.
+This repo is a **research and prototype repository**. Its primary purpose is to process real-world driving data collected via the Torque app (OBD-II), compute trip metrics, identify representative drive cycles, and ultimately support WLTP-style candidate cycle synthesis.
 
-Raw driving-cycle data (`_data/`) was collected via the Torque app and exported as CSV/XLSX.
+Raw driving-cycle data (`_data/`, `raw_data/`) was collected via the Torque app and exported as CSV/XLSX. Archived v2 Parquets are in `data/trips/`.
 
 ## Running the Code
 
 ```bash
-# Run the full test suite (199 tests)
+# Run the full test suite (129 tests)
 uv run pytest
 
-# Launch the new GUI example (ingest → catalog → speed profile chart)
-python examples/gui/main.py
+# Launch the GUI example (three modes: import xlsx, load archive, reload catalog)
+uv run python examples/gui/main.py
 
-# Ingest raw .xlsx files into Parquet + DuckDB catalog
-python examples/cli/ingest.py <raw_xlsx_dir> <output_dir>
+# Ingest raw .xlsx files → v2 archive Parquets + DuckDB catalog
+uv run python examples/cli/ingest.py <raw_xlsx_dir> <archive_dir>
 
 # Analyze trips from catalog (similarity scores, representative trip)
-python examples/cli/analyze.py <output_dir>
+uv run python examples/cli/analyze.py <archive_dir>
 
 # Launch the frozen historical DriveGUI (standalone, no package dependencies)
 cd students/DriveGUI
 python driving_cycles_calculatorV1.py
 ```
 
-The project uses a **uv workspace** with `ruff` for linting and `pytest` for tests. Run `uv sync` from the root to install all dependencies.
+The project uses a **uv workspace** with `ruff` for linting and `pytest` for tests.
+Run `uv sync` from the root to install all dependencies.
 
 ## Development Priorities
 
-The separation of calculation from presentation is complete. The package (`src/drive_cycle_calculator/`) holds all computation logic. `students/DriveGUI/` is frozen as a historical reference.
+See `TODOS.md` for the full backlog. Current top items:
 
-Current priorities (see `TODOS.md` for full backlog):
+1. **Clean up remaining legacy code** — `smooth_and_derive()` in `processing_config.py` (marked TODO), `TripCollection.from_parquet()` (deprecated), `OBDFile.to_parquet_optimised()` (broken hardcoded path), duplicate GPS helper functions.
+2. **Microtrip segmentation** (`Trip.microtrips`) — the core unit for WLTP-style driving-cycle construction.
+3. **Representative microtrip selection** and **candidate cycle assembly** — downstream of segmentation.
 
-1. **Microtrip segmentation** (`Trip.microtrips`) — the core unit for WLTP-style driving-cycle construction.
-2. **Representative microtrip selection** and **candidate cycle assembly** — downstream of segmentation.
-3. **Fix stop_percentage heuristic** — silent wrong-result bug in `students/DriveGUI/stop_percentage.py:72` and `total_stop_percentage.py:85`.
-
-When suggesting or making changes: does it belong in `src/drive_cycle_calculator/` (calculation) or `examples/` (presentation)? Never add business logic to `students/DriveGUI/`.
+When suggesting or making changes: does it belong in `src/drive_cycle_calculator/` (calculation) or `examples/` (thin wrapper)? Never add business logic to `students/DriveGUI/`.
 
 ## Architecture
 
@@ -51,23 +50,49 @@ When suggesting or making changes: does it belong in `src/drive_cycle_calculator
 The active calculation layer. All business logic lives here.
 
 ```
-Raw .xlsx (OBD-II)
-  → TripCollection.from_folder(dir)   # processes all .xlsx in a directory
-  → TripCollection.to_parquet(dir)    # writes one .parquet per trip
-  → TripCollection.to_duckdb_catalog(db_path)  # upserts metadata catalog
+Raw .xlsx / .csv (OBD-II)
+  → OBDFile.from_xlsx() / from_csv()    # load and coerce types
+  → OBDFile.to_parquet(path)            # write v2 archive Parquet (permanent)
 
-Later:
-  → TripCollection.from_duckdb_catalog(db_path)  # lazy-load trip stubs
-  → tc.similarity_scores()            # 7-metric scoring (all trips vs fleet avg)
-  → tc.find_representative()          # argmax of similarity scores
-  → trip.speed_profile()              # DataFrame: elapsed_s + smooth_speed_kmh
+Archive Parquet
+  → TripCollection.from_archive_parquets(dir)   # load + process all trips
+  → TripCollection.to_duckdb_catalog(db_path)   # upsert metadata catalog
+
+Catalog
+  → TripCollection.from_duckdb_catalog(db_path) # reload instantly
+  → tc.similarity_scores()                       # 7-metric scoring
+  → tc.find_representative()                     # highest similarity score
+  → trip.speed_profile                           # (elapsed_s, smooth_speed_kmh)
 ```
 
-Key classes:
-- **`Trip(df, name)`** — wraps one processed DataFrame. `_df` is lazy-loaded from `_path` if `df=None`. `@cached_property` metrics: `mean_speed`, `mean_acc`, `mean_dec`, `stop_pct`, `duration`, `num_stops`, `mean_speed_moving`, `max_speed`.
-- **`TripCollection`** — spans multiple trips. `from_folder()`, `from_excel()`, `from_parquet()`, `from_duckdb_catalog()` constructors. `to_parquet()` and `to_duckdb_catalog()` persistence.
+**File structure:**
+```
+src/drive_cycle_calculator/
+├── __init__.py              — version string only
+├── _schema.py               — OBD_COLUMN_MAP, CURATED_COLS
+├── misc.py                  — _gps_to_duration_seconds, parse_gps_time_torque
+├── obd_file.py              — OBDFile
+├── processing_config.py     — ProcessingConfig, DEFAULT_CONFIG
+└── metrics/
+    ├── __init__.py          — re-exports Trip, TripCollection, similarity
+    ├── trip.py              — Trip
+    ├── trip_collection.py   — TripCollection, similarity(), _SEVEN_METRIC_KEYS
+    └── _computations.py     — gps_to_duration_seconds (legacy helpers removed)
+```
 
-Internal column names are English: `elapsed_s`, `speed_ms`, `smooth_speed_kmh`, `acceleration_ms2`, `deceleration_ms2`.
+**Key classes:**
+- **`OBDFile(df, name)`** — wraps one raw OBD recording. Constructors: `from_xlsx`, `from_csv`, `from_parquet`. Key methods: `to_parquet` (v2 format), `curated_df`, `quality_report`, `to_trip(config)`.
+- **`ProcessingConfig(window=4, stop_threshold_kmh=2.0)`** — controls the processing pipeline. `apply(curated_df)` produces processed DataFrame. `config_hash` stored in DuckDB for reproducibility.
+- **`Trip(df, name, stop_threshold_kmh)`** — one processed session. `@cached_property` metrics: `mean_speed`, `mean_acceleration`, `mean_deceleration`, `stop_pct`, `stop_count`, `duration`, `mean_speed_no_stops`, `max_speed`. `_path` set by constructors for lazy loading.
+- **`TripCollection`** — groups multiple trips. Constructors: `from_folder`, `from_folder_raw`, `from_archive_parquets`, `from_duckdb_catalog`. Methods: `to_duckdb_catalog`, `similarity_scores`, `find_representative`.
+
+**Processed DataFrame columns** (output of `ProcessingConfig.apply()`):
+`elapsed_s`, `smooth_speed_kmh`, `acc_ms2`, `speed_kmh`, `co2_g_per_km`, `engine_load_pct`, `fuel_flow_lph`.
+
+> Note: `speed_ms`, `acceleration_ms2`, `deceleration_ms2` no longer exist in the processed output. `Trip.metrics` still has a fallback for old v1 data, but no new code should produce those columns.
+
+**Required OBD-II columns (CURATED_COLS):**
+`GPS Time`, `Speed (OBD)(km/h)`, `CO₂ in g/km (Average)(g/km)`, `Engine Load(%)`, `Fuel flow rate/hour(l/hr)`
 
 ### Frozen Historical Reference (`students/DriveGUI/`)
 
@@ -85,41 +110,41 @@ Output column names stay Greek (`Διάρκεια (sec)`, `Ταχ m/s`, etc.) as
 
 Thin wrappers over `TripCollection`. No business logic.
 
-- `examples/cli/ingest.py` — ingest raw .xlsx → Parquet + DuckDB
+- `examples/cli/ingest.py` — two-stage ingest: `from_folder_raw` → `OBDFile.to_parquet` per file → `from_archive_parquets` → `to_duckdb_catalog`
 - `examples/cli/analyze.py` — load from catalog → print similarity scores + representative trip
-- `examples/gui/main.py` — Tkinter + Matplotlib GUI: folder picker → ingest → catalog → speed profile
+- `examples/gui/main.py` — Tkinter + Matplotlib GUI with scrollable log pane. Three modes:
+  1. **Import raw xlsx → write archive** (new data)
+  2. **Load existing archive parquets** (already-archived data)
+  3. **Reload from catalog** (instant, no file I/O)
 
-### Data (`_data/`)
+### Data (`_data/`, `raw_data/`, `data/`)
 
-- `complete_extract/` — CSVs organised by driver name (ladikas, kalyvas, stefanakis, galatas, …)
-- `load_file.py` — CSV parsing helpers
-- Primary dataset is on Google Drive (see `DATA.md` for link); local files are a subset
+- `raw_data/` — raw xlsx files from Torque app (source of truth before archiving)
+- `data/trips/` — v2 archive Parquets (permanent source of truth after archiving)
+- `data/metadata.duckdb` — DuckDB catalog (`trip_metadata` table)
+- `_data/complete_extract/` — older CSVs organised by driver name
 
-**Known data-quality issues**:
+**Known data-quality issues:**
 - Galatas file: repeated header rows (potential corruption)
 - Stefanakis dataset: inconsistent column names across files
 - Kalyvas/9.9.24: different format than other sessions
-- Separator (``,``, `;``, ``\t``) and decimal separator (``,`` vs ``.``) vary across files
+- Separator (`,`, `;`, `\t`) and decimal separator (`,` vs `.`) vary across files
 
-### Required OBD-II columns (input XLSX)
+## Language convention
 
-`GPS Time`, `Speed (OBD)(km/h)`, `CO₂ in g/km (Average)(g/km)`, `Engine Load(%)`, `Fuel flow rate/hour(l/hr)`
+**Package (`src/`):** all internal column names are **English** (`elapsed_s`, `smooth_speed_kmh`, `acc_ms2`, `speed_kmh`, etc.). Mapping from raw OBD names happens in `_schema.OBD_COLUMN_MAP` via `ProcessingConfig.apply()`.
+
+**DriveGUI (`students/DriveGUI/`):** all column names remain **Greek** (`Διάρκεια (sec)`, `Ταχ m/s`, etc.) because the 13 visualization modules depend on them. Do not change these.
 
 ## Key Documentation
 
+- `docs/designs/obd-file-processing-config.md` — current pipeline design (classes, columns, DuckDB schema)
 - `students/DriveGUI/ARCHITECTURE.md` — module-by-module documentation for the frozen DriveGUI
 - `students/DriveGUI/PROCESSING_LOGIC.md` — mathematical formulas and filtering details
 - `brainstorming/data_schema/data_schema.md` — Entity-Relationship Diagram for the full system
 - `brainstorming/data_schema/FUEL_EKO_wars.dbml` — DBML schema (target PostgreSQL/Supabase)
 - `DATA.md` — data collection notes and Google Drive link
-- `examples/README.md` — how to use the CLI and GUI examples
 - `TODOS.md` — prioritised backlog
-
-## Language Note
-
-**Package (`src/`):** all internal column names are **English** (`elapsed_s`, `speed_ms`, `smooth_speed_kmh`, `acceleration_ms2`, `deceleration_ms2`). Renaming happens at entry points via `COLUMN_MAP` in `_computations.py`.
-
-**DriveGUI (`students/DriveGUI/`):** all column names remain **Greek** (`Διάρκεια (sec)`, `Ταχ m/s`, etc.) because the 13 visualization modules depend on them. Do not change these.
 
 ## Skill routing
 

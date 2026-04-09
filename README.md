@@ -62,9 +62,30 @@ graph TD
 | :--- | :--- | :--- |
 | **Hardware** | ✅ Verified | Standard ELM327 (WiFi/BT) is sufficient. |
 | **Data Logging** | ⚠️ Testing | Currently manual via Torque; needs automation. |
-| **Backend DB** | 🏗️ In Dev | Focus on creating Urban/Extra-Urban classification. |
+| **Drive Cycle Pipeline** | ✅ Active | `src/drive_cycle_calculator/` — two-stage archive + analysis pipeline. |
+| **Local DB** | ✅ Active | DuckDB catalog (`data/metadata.duckdb`) + v2 archive Parquets. |
+| **Cloud DB** | 🏗️ Planned | Supabase/PostgreSQL migration scripted but not deployed. |
 | **Gamification** | 💡 Conceptual | "Loss Aversion" messaging and reward tiers defined. |
 | **Partnerships** | 🔍 Exploring | Looking at EKO, NTUA, and TEI Crete for scaling. |
+
+---
+
+## 💻 Software
+
+The `src/drive_cycle_calculator/` Python package implements the data pipeline:
+
+```
+Raw OBD xlsx/csv
+  → OBDFile.from_xlsx() / from_csv()           # load + coerce
+  → OBDFile.to_parquet()                        # v2 archive (permanent)
+  → TripCollection.from_archive_parquets()      # process with ProcessingConfig
+  → TripCollection.to_duckdb_catalog()          # upsert metadata
+  → TripCollection.similarity_scores()          # 7-metric scoring
+  → TripCollection.find_representative()        # candidate representative cycle
+```
+
+See `CLAUDE.md` for developer guidance, `TODOS.md` for the backlog, and
+`docs/designs/obd-file-processing-config.md` for the full pipeline design.
 
 ---
 

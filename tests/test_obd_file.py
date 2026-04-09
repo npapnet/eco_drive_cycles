@@ -1,4 +1,5 @@
 """Tests for OBDFile — constructors, quality_report, curated_df, to_trip."""
+
 from __future__ import annotations
 
 import csv
@@ -17,17 +18,20 @@ from drive_cycle_calculator.obd_file import OBDFile
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _make_raw_df(n: int = 10, speed_kmh: float = 30.0) -> pd.DataFrame:
     """Minimal raw OBD DataFrame (all CURATED_COLS, uniform GPS timestamps)."""
     timestamps = [f"Mon Sep 22 10:30:{i:02d} +0300 2019" for i in range(n)]
-    return pd.DataFrame({
-        "GPS Time": timestamps,
-        "Speed (OBD)(km/h)": [speed_kmh] * n,
-        "CO\u2082 in g/km (Average)(g/km)": [120.0] * n,
-        "Engine Load(%)": [50.0] * n,
-        "Fuel flow rate/hour(l/hr)": [2.0] * n,
-        "Extra Column": ["x"] * n,  # should be preserved in archive
-    })
+    return pd.DataFrame(
+        {
+            "GPS Time": timestamps,
+            "Speed (OBD)(km/h)": [speed_kmh] * n,
+            "CO\u2082 in g/km (Average)(g/km)": [120.0] * n,
+            "Engine Load(%)": [50.0] * n,
+            "Fuel flow rate/hour(l/hr)": [2.0] * n,
+            "Extra Column": ["x"] * n,  # should be preserved in archive
+        }
+    )
 
 
 def _write_xlsx(path: Path, df: pd.DataFrame) -> None:
@@ -58,6 +62,7 @@ def _write_archive_parquet(path: Path, df: pd.DataFrame | None = None) -> None:
 
 # ── from_xlsx ─────────────────────────────────────────────────────────────────
 
+
 class TestFromXlsx:
     def test_happy_path(self, tmp_path):
         """from_xlsx loads all columns; name comes from file stem."""
@@ -74,13 +79,15 @@ class TestFromXlsx:
         # simulating what the Torque xlsx export looks like.
         timestamps = [f"Mon Sep 22 10:30:{i:02d} +0300 2019" for i in range(10)]
         speed_values = ["-"] + [30.0] * 9  # first row is a dash
-        df = pd.DataFrame({
-            "GPS Time": timestamps,
-            "Speed (OBD)(km/h)": speed_values,  # object dtype (mixed)
-            "CO\u2082 in g/km (Average)(g/km)": [120.0] * 10,
-            "Engine Load(%)": [50.0] * 10,
-            "Fuel flow rate/hour(l/hr)": [2.0] * 10,
-        })
+        df = pd.DataFrame(
+            {
+                "GPS Time": timestamps,
+                "Speed (OBD)(km/h)": speed_values,  # object dtype (mixed)
+                "CO\u2082 in g/km (Average)(g/km)": [120.0] * 10,
+                "Engine Load(%)": [50.0] * 10,
+                "Fuel flow rate/hour(l/hr)": [2.0] * 10,
+            }
+        )
         p = tmp_path / "dash_test.xlsx"
         _write_xlsx(p, df)
         obd = OBDFile.from_xlsx(p)
@@ -104,6 +111,7 @@ class TestFromXlsx:
 
 
 # ── from_csv ──────────────────────────────────────────────────────────────────
+
 
 class TestFromCsv:
     def test_comma_separator(self, tmp_path):
@@ -165,6 +173,7 @@ class TestFromCsv:
 
 # ── from_parquet ──────────────────────────────────────────────────────────────
 
+
 class TestFromParquet:
     def test_v2_loads_ok(self, tmp_path):
         """v2 archive Parquet (no smooth_speed_kmh column) loads without error."""
@@ -194,6 +203,7 @@ class TestFromParquet:
 
 
 # ── to_parquet ────────────────────────────────────────────────────────────────
+
 
 class TestToParquet:
     def test_roundtrip(self, tmp_path):
@@ -226,6 +236,7 @@ class TestToParquet:
 
 # ── curated_df ────────────────────────────────────────────────────────────────
 
+
 class TestCuratedDf:
     def test_returns_curated_cols_subset(self):
         """curated_df returns only CURATED_COLS columns that are present."""
@@ -254,15 +265,21 @@ class TestCuratedDf:
 
 # ── quality_report ────────────────────────────────────────────────────────────
 
+
 class TestQualityReport:
     def test_all_keys_present(self):
         """quality_report returns all 8 documented keys."""
         obd = OBDFile(_make_raw_df(), "test")
         report = obd.quality_report()
         expected_keys = {
-            "row_count", "missing_pct", "dash_count",
-            "gps_gap_count", "speed_outlier_count",
-            "speed_min_kmh", "speed_max_kmh", "missing_curated_cols",
+            "row_count",
+            "missing_pct",
+            "dash_count",
+            "gps_gap_count",
+            "speed_outlier_count",
+            "speed_min_kmh",
+            "speed_max_kmh",
+            "missing_curated_cols",
         }
         assert set(report.keys()) == expected_keys
 
@@ -293,13 +310,15 @@ class TestQualityReport:
             "Mon Sep 22 10:30:04 +0300 2019",
             "Mon Sep 22 10:30:15 +0300 2019",  # 11-second gap
         ]
-        df = pd.DataFrame({
-            "GPS Time": times,
-            "Speed (OBD)(km/h)": [30.0] * 6,
-            "CO\u2082 in g/km (Average)(g/km)": [120.0] * 6,
-            "Engine Load(%)": [50.0] * 6,
-            "Fuel flow rate/hour(l/hr)": [2.0] * 6,
-        })
+        df = pd.DataFrame(
+            {
+                "GPS Time": times,
+                "Speed (OBD)(km/h)": [30.0] * 6,
+                "CO\u2082 in g/km (Average)(g/km)": [120.0] * 6,
+                "Engine Load(%)": [50.0] * 6,
+                "Fuel flow rate/hour(l/hr)": [2.0] * 6,
+            }
+        )
         obd = OBDFile(df, "gap_test")
         assert obd.quality_report()["gps_gap_count"] >= 1
 
@@ -334,20 +353,27 @@ class TestQualityReport:
         obd = OBDFile(df, "empty")
         report = obd.quality_report()
         assert report["row_count"] == 0
-
+        assert report["gps_gap_count"] == 0
 
 # ── to_trip ───────────────────────────────────────────────────────────────────
+
 
 class TestToTrip:
     def test_happy_path_columns(self):
         """to_trip() returns Trip with expected processed columns."""
         from drive_cycle_calculator.metrics.trip import Trip
+
         obd = OBDFile(_make_raw_df(), "test_trip")
         trip = obd.to_trip()
         assert isinstance(trip, Trip)
         expected_cols = {
-            "elapsed_s", "smooth_speed_kmh", "acc_ms2",
-            "speed_kmh", "co2_g_per_km", "engine_load_pct", "fuel_flow_lph",
+            "elapsed_s",
+            "smooth_speed_kmh",
+            "acc_ms2",
+            "speed_kmh",
+            "co2_g_per_km",
+            "engine_load_pct",
+            "fuel_flow_lph",
         }
         assert set(trip._df.columns) == expected_cols
 
@@ -367,6 +393,7 @@ class TestToTrip:
     def test_custom_config_applied(self):
         """ProcessingConfig.window is respected by to_trip."""
         from drive_cycle_calculator.processing_config import ProcessingConfig
+
         obd = OBDFile(_make_raw_df(n=30), "test")
         trip4 = obd.to_trip(ProcessingConfig(window=4))
         trip8 = obd.to_trip(ProcessingConfig(window=8))

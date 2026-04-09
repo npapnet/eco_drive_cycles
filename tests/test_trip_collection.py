@@ -1,4 +1,5 @@
 """Tests for TripCollection — constructors, catalog, similarity scoring."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -15,15 +16,18 @@ from drive_cycle_calculator.processing_config import ProcessingConfig
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _make_raw_df(n: int = 20, speed_kmh: float = 30.0) -> pd.DataFrame:
     timestamps = [f"Mon Sep 22 10:30:{i:02d} +0300 2019" for i in range(n)]
-    return pd.DataFrame({
-        "GPS Time": timestamps,
-        "Speed (OBD)(km/h)": [speed_kmh] * n,
-        "CO\u2082 in g/km (Average)(g/km)": [120.0] * n,
-        "Engine Load(%)": [50.0] * n,
-        "Fuel flow rate/hour(l/hr)": [2.0] * n,
-    })
+    return pd.DataFrame(
+        {
+            "GPS Time": timestamps,
+            "Speed (OBD)(km/h)": [speed_kmh] * n,
+            "CO\u2082 in g/km (Average)(g/km)": [120.0] * n,
+            "Engine Load(%)": [50.0] * n,
+            "Fuel flow rate/hour(l/hr)": [2.0] * n,
+        }
+    )
 
 
 def _write_archive(path: Path, speed_kmh: float = 30.0, n: int = 20) -> None:
@@ -36,6 +40,7 @@ def _write_xlsx(path: Path, speed_kmh: float = 30.0, n: int = 20) -> None:
 
 
 # ── from_folder (uses OBDFile pipeline) ──────────────────────────────────────
+
 
 class TestFromFolder:
     def test_loads_all_xlsx(self, tmp_path):
@@ -78,6 +83,7 @@ class TestFromFolder:
 
 # ── from_folder_raw ───────────────────────────────────────────────────────────
 
+
 class TestFromFolderRaw:
     def test_returns_list_of_obd_files(self, tmp_path):
         """from_folder_raw returns list[OBDFile], not a TripCollection."""
@@ -101,6 +107,7 @@ class TestFromFolderRaw:
 
 # ── from_archive_parquets ─────────────────────────────────────────────────────
 
+
 class TestFromArchiveParquets:
     def test_loads_v2_parquets(self, tmp_path):
         """from_archive_parquets loads v2 archive Parquets into Trips."""
@@ -121,9 +128,7 @@ class TestFromArchiveParquets:
     def test_custom_config_applied(self, tmp_path):
         """ProcessingConfig is forwarded to OBDFile.to_trip."""
         _write_archive(tmp_path / "trip.parquet", n=30)
-        tc = TripCollection.from_archive_parquets(
-            tmp_path, config=ProcessingConfig(window=4)
-        )
+        tc = TripCollection.from_archive_parquets(tmp_path, config=ProcessingConfig(window=4))
         assert "smooth_speed_kmh" in tc.trips[0]._df.columns
 
     def test_trip_path_set(self, tmp_path):
@@ -140,10 +145,12 @@ class TestFromArchiveParquets:
 
 # ── to_duckdb_catalog / from_duckdb_catalog ───────────────────────────────────
 
+
 class TestDuckDBCatalog:
     def test_config_hash_written_to_catalog(self, tmp_path):
         """to_duckdb_catalog stores config_hash in trip_metadata."""
         import duckdb
+
         p = tmp_path / "trip.parquet"
         _write_archive(p)
         tc = TripCollection.from_archive_parquets(tmp_path)
@@ -168,6 +175,7 @@ class TestDuckDBCatalog:
     def test_alter_table_migration_for_existing_catalog(self, tmp_path):
         """to_duckdb_catalog adds config_hash column to catalogs that lack it."""
         import duckdb
+
         db = tmp_path / "old_catalog.db"
         # Create a catalog without config_hash
         with duckdb.connect(str(db)) as conn:
@@ -190,10 +198,13 @@ class TestDuckDBCatalog:
         tc = TripCollection.from_archive_parquets(tmp_path)
         tc.to_duckdb_catalog(db)
         with duckdb.connect(str(db), read_only=True) as conn:
-            cols = [r[0] for r in conn.execute(
-                "SELECT column_name FROM information_schema.columns "
-                "WHERE table_name='trip_metadata'"
-            ).fetchall()]
+            cols = [
+                r[0]
+                for r in conn.execute(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_name='trip_metadata'"
+                ).fetchall()
+            ]
         assert "config_hash" in cols
 
     def test_stale_parquet_path_warns_at_load(self, tmp_path):
@@ -211,7 +222,8 @@ class TestDuckDBCatalog:
 
 # ── similarity_scores / find_representative ───────────────────────────────────
 
-class TestSimilarity:
+
+class TestSimilarityTC:
     def _make_tc(self, speeds: list[float], tmp_path: Path) -> TripCollection:
         """Build a TripCollection from a list of constant speeds."""
         trips = []
@@ -248,6 +260,7 @@ class TestSimilarity:
 
 
 # ── Dunder ────────────────────────────────────────────────────────────────────
+
 
 class TestDunder:
     def test_len(self):
