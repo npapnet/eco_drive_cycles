@@ -36,28 +36,7 @@ _SEVEN_METRIC_KEYS = (
     "mean_dec",
 )
 
-# Maps Greek DriveGUI column names (from calculations-log xlsx) to English package names.
-# Applied at both entry points: _process_raw_df() and TripCollection.from_excel().
-# NOTE: "Speed (OBD)(km/h)" → "speed_kmh" belongs to OBD_COLUMN_MAP in _schema.py, NOT here.
-GREEK_COLUMN_MAP = {
-    "Διάρκεια (sec)": "elapsed_s",
-    "Ταχ m/s": "speed_ms",
-    "Εξομαλυνση": "smooth_speed_kmh",
-    "Εξομάλυνση": "smooth_speed_kmh",  # accent variant
-    "Επιταχυνση": "acceleration_ms2",
-    "Επιβραδυνση": "deceleration_ms2",
-}
 
-# Backward-compat alias — callers that imported COLUMN_MAP keep working.
-COLUMN_MAP = GREEK_COLUMN_MAP
-
-
-def normalise_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """Rename Greek column names to English at the package boundary.
-
-    Safe to call multiple times — idempotent. Unknown columns pass through unchanged.
-    """
-    return df.rename(columns=COLUMN_MAP)
 
 
 _REQUIRED_RAW_COLS = [
@@ -210,33 +189,7 @@ def process_raw_df(df_raw: pd.DataFrame) -> pd.DataFrame:
     )
 
 
-def infer_sheet_name(df_raw: pd.DataFrame, xlsx_path: Path) -> str:
-    """Infer a sheet name like '2025-05-14_Morning' from a raw OBD DataFrame.
 
-    1. Reads cell A2 (iloc[1, 0]) for the recording timestamp.
-    2. Strips 'GMT' and normalises timezone offset ('+03:00' → '+0300').
-    3. Parses with strptime('%a %b %d %H:%M:%S %z %Y').
-    4. Falls back to file mtime if parsing fails.
-    5. Returns 'YYYY-MM-DD_Morning' or 'YYYY-MM-DD_Evening' (max 31 chars).
-    """
-    dt: datetime | None = None
-
-    try:
-        raw = str(df_raw.iloc[1, 0])
-        raw = raw.replace("GMT", "")
-        raw = re.sub(r"(\+\d\d):(\d\d)", r"\1\2", raw).strip()
-        dt = datetime.strptime(raw, "%a %b %d %H:%M:%S %z %Y")
-    except (ValueError, IndexError):
-        pass
-
-    if dt is None:
-        try:
-            dt = datetime.fromtimestamp(xlsx_path.stat().st_mtime)
-        except OSError:
-            dt = datetime.now()
-
-    session = "Morning" if dt.hour < 12 else "Evening"
-    return f"{dt.date().isoformat()}_{session}"[:31]
 
 
 def load_raw_df(path: str | Path) -> pd.DataFrame:

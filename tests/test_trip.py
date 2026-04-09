@@ -12,7 +12,6 @@ import pytest
 
 from drive_cycle_calculator.metrics import Trip, TripCollection, load_raw_df
 from drive_cycle_calculator.metrics._computations import (
-    infer_sheet_name,
     process_raw_df,
 )
 
@@ -326,47 +325,7 @@ class TestLoadRawDf:
             load_raw_df(tmp_path)
 
 
-# ────────────────────────────────────────────────────────────────
-# TestInferSheetName
-# ────────────────────────────────────────────────────────────────
 
-
-class TestInferSheetName:
-    def _make_df_with_a2(self, a2_value: str) -> pd.DataFrame:
-        """DataFrame where iloc[1, 0] contains a2_value."""
-        return pd.DataFrame({"col": ["header_row_0", a2_value, "data", "data"]})
-
-    def test_valid_a2_timestamp_morning(self, tmp_path):
-        """Valid A2 timestamp with hour < 12 → Morning."""
-        df = self._make_df_with_a2("Mon Sep 22 10:30:00 +0300 2019")
-        name = infer_sheet_name(df, tmp_path / "f.xlsx")
-        assert name == "2019-09-22_Morning"
-
-    def test_valid_a2_timestamp_evening(self, tmp_path):
-        """Valid A2 timestamp with hour >= 12 → Evening."""
-        df = self._make_df_with_a2("Mon Sep 22 18:45:00 +0300 2019")
-        name = infer_sheet_name(df, tmp_path / "f.xlsx")
-        assert name == "2019-09-22_Evening"
-
-    def test_invalid_a2_falls_back_to_mtime(self, tmp_path):
-        """Unparseable A2 falls back to file mtime, still returns YYYY-MM-DD_Session."""
-        xlsx = tmp_path / "session.xlsx"
-        xlsx.write_text("placeholder")
-        df = self._make_df_with_a2("this is not a timestamp")
-        name = infer_sheet_name(df, xlsx)
-        # Should be YYYY-MM-DD_Morning or YYYY-MM-DD_Evening
-        parts = name.split("_")
-        assert len(parts) == 2
-        assert parts[1] in {"Morning", "Evening"}
-        # Date should look like a date
-        date_parts = parts[0].split("-")
-        assert len(date_parts) == 3
-
-    def test_result_within_excel_sheet_name_limit(self, tmp_path):
-        """Sheet names must be ≤ 31 characters."""
-        df = self._make_df_with_a2("Mon Sep 22 10:30:00 +0300 2019")
-        name = infer_sheet_name(df, tmp_path / "f.xlsx")
-        assert len(name) <= 31
 
 
 # ────────────────────────────────────────────────────────────────

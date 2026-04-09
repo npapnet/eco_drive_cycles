@@ -19,7 +19,6 @@ import pandas as pd
 
 from drive_cycle_calculator.metrics._computations import (
     _SEVEN_METRIC_KEYS,
-    normalise_columns,
     similarity,
 )
 from drive_cycle_calculator.metrics.trip import Trip
