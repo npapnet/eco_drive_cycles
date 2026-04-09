@@ -93,3 +93,20 @@ class ProcessingConfig:
 
 # Module-level singleton — the default configuration used when no config is specified.
 DEFAULT_CONFIG = ProcessingConfig()
+
+
+def smooth_and_derive(speed_kmh: pd.Series) -> dict:
+    """Apply rolling smoothing and derive acceleration columns.
+
+    TODO: Remove from codebase
+    """
+    smooth_speed = speed_kmh.rolling(window=4, center=True, min_periods=4).mean()
+    speed_ms = smooth_speed / 3.6
+    acceleration = speed_ms.diff()
+    return dict(
+        smooth_speed=smooth_speed,
+        speed_ms=speed_ms,
+        acceleration=acceleration,
+        pos_acc=acceleration.where(acceleration > 0),
+        neg_acc=acceleration.where(acceleration < 0),
+    )

@@ -39,17 +39,3 @@ def gps_to_duration_seconds(gps_series: pd.Series) -> pd.Series:
         return (dt - first_dt).dt.total_seconds()
 
     return pd.Series([np.nan] * len(gps_series), index=gps_series.index)
-
-
-def smooth_and_derive(speed_kmh: pd.Series) -> dict:
-    """Apply rolling smoothing and derive acceleration columns."""
-    smooth_speed = speed_kmh.rolling(window=4, center=True, min_periods=4).mean()
-    speed_ms = smooth_speed / 3.6
-    acceleration = speed_ms.diff()
-    return dict(
-        smooth_speed=smooth_speed,
-        speed_ms=speed_ms,
-        acceleration=acceleration,
-        pos_acc=acceleration.where(acceleration > 0),
-        neg_acc=acceleration.where(acceleration < 0),
-    )
