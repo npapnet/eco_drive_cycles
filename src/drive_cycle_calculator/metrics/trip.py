@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from drive_cycle_calculator.metrics._computations import _compute_session_metrics
+from drive_cycle_calculator.metrics._computations import compute_session_metrics
 
 
 class Trip:
@@ -78,7 +78,7 @@ class Trip:
         Keys: duration, mean_speed, mean_ns, stops, stop_pct, mean_acc, mean_dec.
         Missing source columns return NaN rather than raising.
         """
-        return _compute_session_metrics(self._df, self.stop_threshold_kmh)
+        return compute_session_metrics(self._df, self.stop_threshold_kmh)
 
     @cached_property
     def duration(self) -> float:

@@ -49,6 +49,11 @@ obd = OBDFile.from_parquet(path)
 
 df = obd.full_df
 # %%
+obd.curated_df.columns
+# %% Generate Trip from OBDFile
+trip = obd.to_trip()
+trip.metadata
+# %%
 
 print(f"Shape: {df.shape[0]} rows x {df.shape[1]} columns\n")
 
