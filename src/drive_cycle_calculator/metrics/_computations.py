@@ -20,24 +20,6 @@ import pandas as pd
 # A.  PRIVATE HELPERS
 # ────────────────────────────────────────────────────────────────────────────
 
-_SEVEN_METRIC_KEYS = (
-    "duration",
-    "mean_speed",
-    "mean_ns",
-    "stops",
-    "stop_pct",
-    "mean_acc",
-    "mean_dec",
-)
-
-_REQUIRED_RAW_COLS = [
-    "GPS Time",
-    "Speed (OBD)(km/h)",
-    "CO\u2082 in g/km (Average)(g/km)",
-    "Engine Load(%)",
-    "Fuel flow rate/hour(l/hr)",
-]
-
 
 def gps_to_duration_seconds(gps_series: pd.Series) -> pd.Series:
     """Convert GPS Time column to elapsed seconds from the first valid record.
