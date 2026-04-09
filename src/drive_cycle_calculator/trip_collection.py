@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
-from drive_cycle_calculator.metrics.trip import Trip
+from drive_cycle_calculator.trip import Trip
 
 if TYPE_CHECKING:
     from drive_cycle_calculator.obd_file import OBDFile

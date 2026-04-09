@@ -21,7 +21,7 @@ Usage:
 import sys
 from pathlib import Path
 
-from drive_cycle_calculator.metrics.trip_collection import TripCollection
+from drive_cycle_calculator.trip_collection import TripCollection
 
 raw_dir = Path(sys.argv[1])
 out_dir = Path(sys.argv[2])

@@ -1,11 +1,12 @@
-#%%
+# %%
 from pathlib import Path
 import pandas as pd
 
 import matplotlib.pyplot as plt
-#%%
+
+# %%
 ROOTDIR = Path(__file__).parents[2]
-DATADIR = ROOTDIR / 'data'/'trips'
+DATADIR = ROOTDIR / "data" / "trips"
 
 assert DATADIR.exists(), "Data directory does not exist"
 
@@ -21,15 +22,15 @@ FNAME = parquet_files[0]
 df = pd.read_parquet(FNAME)
 # %%
 ren_dict = {
-    'elapsed_s' :'elapsed_s', 
-    'co2' : 'CO₂ in g/km (Average)(g/km)', 
-    'engine_load' : 'Engine Load(%)',
-    'fuel_rate_lph' : 'Fuel flow rate/hour(l/hr)', 
-    'v_smooth':'smooth_speed_kmh',
-    'v_mps' : 'speed_ms', 
-    'a_mps2' : 'a(m/s2)',
-    'accel':'acceleration_ms2', 
-    'decel':'deceleration_ms2'
+    "elapsed_s": "elapsed_s",
+    "co2": "CO₂ in g/km (Average)(g/km)",
+    "engine_load": "Engine Load(%)",
+    "fuel_rate_lph": "Fuel flow rate/hour(l/hr)",
+    "v_smooth": "smooth_speed_kmh",
+    "v_mps": "speed_ms",
+    "a_mps2": "a(m/s2)",
+    "accel": "acceleration_ms2",
+    "decel": "deceleration_ms2",
 }
 
 rev_dict = {value: key for key, value in ren_dict.items()}
@@ -45,26 +46,24 @@ plt.title("CO₂ vs Time")
 # %%
 
 plt.plot(df["elapsed_s"], df["a_mps2"])
-plt.plot(df["elapsed_s"], df["accel"],'.')
-plt.plot(df["elapsed_s"], df["decel"],'.')
+plt.plot(df["elapsed_s"], df["accel"], ".")
+plt.plot(df["elapsed_s"], df["decel"], ".")
 plt.xlabel("Time (s)")
 plt.ylabel("Acceleration (m/s²)")
 plt.title("Acceleration vs Time")
 # %%
 plt.plot(df["elapsed_s"], df["v_mps"])
-plt.plot(df["elapsed_s"], df["v_smooth"]/3.6,'.')
+plt.plot(df["elapsed_s"], df["v_smooth"] / 3.6, ".")
 plt.xlabel("Time (s)")
 plt.ylabel("Speed (m/s)")
 
 # %%
-from drive_cycle_calculator.metrics.trip import Trip
+from drive_cycle_calculator.trip import Trip
 
 # Load via TripCollection.from_parquet or construct directly after reading df
 # Note: Trip(df, name) requires a processed DataFrame and a name string.
 # This cell is a placeholder — use TripCollection.from_parquet() to load a folder.
 t1 = Trip(df=pd.read_parquet(FNAME), name=FNAME.stem)
-
-
 
 
 # %%

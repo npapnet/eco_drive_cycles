@@ -45,10 +45,8 @@ src/drive_cycle_calculator/
 ├── gps_time_parser.py       — Converts GPS time in various forms to datetime objects and duration seconds
 ├── obd_file.py              — OBDFile
 ├── processing_config.py     — ProcessingConfig, DEFAULT_CONFIG
-└── metrics/
-    ├── __init__.py          — re-exports Trip, TripCollection, similarity, load_raw_df
-    ├── trip.py              — Trip
-    └── trip_collection.py   — TripCollection, similarity()
+├── trip.py                  — Trip
+└── trip_collection.py       — TripCollection, similarity()
 ```
 
 ---
@@ -147,7 +145,7 @@ DEFAULT_CONFIG = ProcessingConfig()   # window=4, stop_threshold_kmh=2.0
 
 ---
 
-## `Trip` (`metrics/trip.py`)
+## `Trip` (`trip.py`)
 
 One processed driving session.
 
@@ -188,7 +186,7 @@ trip.metrics  # → dict with keys:
 
 ---
 
-## `TripCollection` (`metrics/trip_collection.py`)
+## `TripCollection` (`trip_collection.py`)
 
 Groups multiple `Trip` objects. Canonical entry point for multi-trip analysis.
 
@@ -237,33 +235,6 @@ CREATE TABLE IF NOT EXISTS trip_metadata (
 
 ---
 
-## `_computations.py` (internal helpers)
-
-Still present for backward compatibility and test support. **Not part of the primary
-pipeline** — `ProcessingConfig.apply()` replaced `process_raw_df()` as the
-canonical processing step.
-
-| Name | Status | Notes |
-|------|--------|-------|
-| `_SEVEN_METRIC_KEYS` | Active | Used by `TripCollection.similarity_scores()` |
-| `process_raw_df(df)` | Legacy | Was the original processing function; kept for `TestProcessRawDf`. Produces old column names (`speed_ms`, `acceleration_ms2`, `deceleration_ms2`). |
-| `load_raw_df(path)` | Legacy | Thin wrapper over `pd.read_excel()`. Superseded by `OBDFile.from_xlsx()`. Re-exported from `metrics/__init__.py` for backward compatibility. |
-| `gps_to_duration_seconds(series)` | Active | General-purpose version (handles numeric + datetime). Used in tests. |
-| `smooth_and_derive(speed_kmh)` | Legacy | Used internally by `process_raw_df()`. Window is hardcoded to 4. |
-| `_REQUIRED_RAW_COLS` | Legacy | Used by `process_raw_df()`. |
-
----
-
-## `misc.py`
-
-Utility functions for GPS timestamp parsing.
-
-| Name | Description |
-|------|-------------|
-| `_gps_to_duration_seconds(series)` | Parses Torque export timestamps (`"Mon Sep 22 10:30:00 +0300 2019"`) via `dateutil`. Returns elapsed seconds from first valid timestamp. Handles `pd.Timestamp` input (archive Parquets) and string input (raw xlsx). |
-| `parse_gps_time_torque(series)` | Parses Torque GPS Time strings to UTC-aware `pd.Timestamp` series. Used by `OBDFile.to_parquet_optimised()`. |
-
----
 
 ## Interactive Research Usage
 

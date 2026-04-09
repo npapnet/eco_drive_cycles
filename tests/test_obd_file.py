@@ -355,13 +355,14 @@ class TestQualityReport:
         assert report["row_count"] == 0
         assert report["gps_gap_count"] == 0
 
+
 # ── to_trip ───────────────────────────────────────────────────────────────────
 
 
 class TestToTrip:
     def test_happy_path_columns(self):
         """to_trip() returns Trip with expected processed columns."""
-        from drive_cycle_calculator.metrics.trip import Trip
+        from drive_cycle_calculator.trip import Trip
 
         obd = OBDFile(_make_raw_df(), "test_trip")
         trip = obd.to_trip()

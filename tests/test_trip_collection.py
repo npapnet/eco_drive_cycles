@@ -8,8 +8,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from drive_cycle_calculator.metrics.trip import Trip
-from drive_cycle_calculator.metrics.trip_collection import TripCollection
+from drive_cycle_calculator.trip import Trip
+from drive_cycle_calculator.trip_collection import TripCollection
 from drive_cycle_calculator.obd_file import OBDFile
 from drive_cycle_calculator.processing_config import ProcessingConfig
 

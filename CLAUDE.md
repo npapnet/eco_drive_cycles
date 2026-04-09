@@ -70,14 +70,11 @@ Catalog
 src/drive_cycle_calculator/
 ├── __init__.py              — version string only
 ├── _schema.py               — OBD_COLUMN_MAP, CURATED_COLS
-├── misc.py                  — _gps_to_duration_seconds, parse_gps_time_torque
+├── gps_time_parser.py       — GpsTimeParser
 ├── obd_file.py              — OBDFile
 ├── processing_config.py     — ProcessingConfig, DEFAULT_CONFIG
-└── metrics/
-    ├── __init__.py          — re-exports Trip, TripCollection, similarity
-    ├── trip.py              — Trip
-    ├── trip_collection.py   — TripCollection, similarity(), _SEVEN_METRIC_KEYS
-    └── _computations.py     — gps_to_duration_seconds (legacy helpers removed)
+├── trip.py                  — Trip
+└── trip_collection.py       — TripCollection, similarity(), _SEVEN_METRIC_KEYS
 ```
 
 **Key classes:**

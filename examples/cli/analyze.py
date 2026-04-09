@@ -5,10 +5,11 @@ Runs instantly — no raw file reprocessing.
 Usage:
     python examples/cli/analyze.py ./data/
 """
+
 import sys
 from pathlib import Path
 
-from drive_cycle_calculator.metrics.trip import TripCollection
+from drive_cycle_calculator.trip import TripCollection
 
 out_dir = Path(sys.argv[1])
 db_path = out_dir / "metadata.duckdb"

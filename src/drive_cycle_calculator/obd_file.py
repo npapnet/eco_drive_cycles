@@ -22,7 +22,7 @@ from drive_cycle_calculator.gps_time_parser import GpsTimeParser
 
 if TYPE_CHECKING:
     from drive_cycle_calculator.processing_config import ProcessingConfig
-    from drive_cycle_calculator.metrics.trip import Trip
+    from drive_cycle_calculator.trip import Trip
 
 # Parquet format version written to PyArrow schema metadata.
 # v1 = old processed format (smooth_speed_kmh column present).
@@ -302,7 +302,7 @@ class OBDFile:
             If any CURATED_COL is missing from the raw DataFrame.
         """
         from drive_cycle_calculator.processing_config import DEFAULT_CONFIG
-        from drive_cycle_calculator.metrics.trip import Trip
+        from drive_cycle_calculator.trip import Trip
 
         if config is None:
             config = DEFAULT_CONFIG

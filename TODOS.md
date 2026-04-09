@@ -141,10 +141,10 @@ is `ProcessingConfig(window=4)`.
 
 **Shipped:**
 - `src/drive_cycle_calculator/_schema.py` — `OBD_COLUMN_MAP`, `CURATED_COLS`
-- `src/drive_cycle_calculator/misc.py` — `_gps_to_duration_seconds`, `parse_gps_time_torque`
+- `src/drive_cycle_calculator/gps_time_parser.py` — `GpsTimeParser`
 - `src/drive_cycle_calculator/obd_file.py` — `OBDFile.from_xlsx/from_csv/from_parquet`, `to_parquet` (v2 format), `curated_df`, `quality_report`, `to_trip`
 - `src/drive_cycle_calculator/processing_config.py` — `ProcessingConfig`, `config_hash`, `DEFAULT_CONFIG`
-- `src/drive_cycle_calculator/metrics/trip_collection.py` — `TripCollection` extracted from `trip.py`; adds `from_folder_raw`, `from_archive_parquets`, `from_duckdb_catalog` (eager via OBDFile)
+- `src/drive_cycle_calculator/trip_collection.py` — `TripCollection` extracted from `trip.py`; adds `from_folder_raw`, `from_archive_parquets`, `from_duckdb_catalog` (eager via OBDFile)
 - `scripts/migrate_to_archive.py` — one-shot xlsx → v2 Parquet converter
 - `examples/cli/ingest.py` — two-stage ingest workflow
 - 129 tests passing
@@ -161,8 +161,7 @@ Note: `speed_ms`, `acceleration_ms2`, `deceleration_ms2` were removed as redunda
 `_REQUIRED_RAW_COLS` from `_computations.py`. `_similarity_calcs.py` module folded into
 `trip_collection.py`. `similarity()` and `_SEVEN_METRIC_KEYS` now live in `trip_collection.py`.
 
-**Remaining in `_computations.py`:** only `gps_to_duration_seconds()` (general-purpose,
-used in `test_calculations.py`).
+**Remaining in `_computations.py`:** None. Completely deleted after migrating `gps_to_duration_seconds()` to `GpsTimeParser`.
 
 ---
 
@@ -213,5 +212,5 @@ data/
 
 1. **`smooth_and_derive()` in `processing_config.py`** — marked `TODO: Remove from codebase`. Used only by `TestSmoothAndDerive` in `test_processing_config.py`. Both the function and its test class should be deleted.
 2. **`_computations.gps_to_duration_seconds()`** — near-duplicate of `misc._gps_to_duration_seconds()`. Replaced with GpsTimeParser Class
-3. **`misc.py` housekeeping** — no module docstring; `_gps_to_duration_seconds` is private-named but imported by `processing_config.py`. Rename to public API or document explicitly.
+3. **`misc.py` housekeeping** — completely deleted after migrating date parsers to `GpsTimeParser`.
 4. **`TripCollection.from_parquet()`** — deprecated, reads old v1 processed Parquets. No tests reference it except backward-compat ones. Remove method and update any remaining tests.
