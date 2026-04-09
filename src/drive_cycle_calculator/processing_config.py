@@ -12,7 +12,8 @@ from functools import cached_property
 
 import pandas as pd
 
-from drive_cycle_calculator._schema import OBD_COLUMN_MAP, _gps_to_duration_seconds
+from drive_cycle_calculator._schema import OBD_COLUMN_MAP
+from drive_cycle_calculator.misc import _gps_to_duration_seconds
 
 
 @dataclasses.dataclass
@@ -67,15 +68,17 @@ class ProcessingConfig:
 
         passthrough = curated_df.rename(columns=OBD_COLUMN_MAP)
 
-        return pd.DataFrame({
-            "elapsed_s": elapsed_s,
-            "smooth_speed_kmh": smooth_speed,
-            "acc_ms2": acc_ms2,
-            "speed_kmh": passthrough["speed_kmh"],
-            "co2_g_per_km": pd.to_numeric(passthrough["co2_g_per_km"], errors="coerce"),
-            "engine_load_pct": pd.to_numeric(passthrough["engine_load_pct"], errors="coerce"),
-            "fuel_flow_lph": pd.to_numeric(passthrough["fuel_flow_lph"], errors="coerce"),
-        })
+        return pd.DataFrame(
+            {
+                "elapsed_s": elapsed_s,
+                "smooth_speed_kmh": smooth_speed,
+                "acc_ms2": acc_ms2,
+                "speed_kmh": passthrough["speed_kmh"],
+                "co2_g_per_km": pd.to_numeric(passthrough["co2_g_per_km"], errors="coerce"),
+                "engine_load_pct": pd.to_numeric(passthrough["engine_load_pct"], errors="coerce"),
+                "fuel_flow_lph": pd.to_numeric(passthrough["fuel_flow_lph"], errors="coerce"),
+            }
+        )
 
     @cached_property
     def config_hash(self) -> str:

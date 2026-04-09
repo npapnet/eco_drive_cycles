@@ -18,16 +18,16 @@ Example:
 import sys
 from pathlib import Path
 
-from drive_cycle_calculator.metrics import load_raw_df
+from drive_cycle_calculator.obd_file import OBDFile
 
 # %%
 
-if len(sys.argv) < 2:
-    # Requires at least one argument
-    print("Usage: python examples/cli/inspect_raw.py <path/to/file.xlsx>")
-    sys.exit(1)
-else:
-    path = Path(sys.argv[1])
+# if len(sys.argv) < 2:
+#     # Requires at least one argument
+#     print("Usage: python examples/cli/inspect_raw.py <path/to/file.xlsx>")
+#     sys.exit(1)
+# else:
+#     path = Path(sys.argv[1])
 
 # %% For use with interactive system
 ROOTDIR = Path(__file__).parents[2]
@@ -40,14 +40,19 @@ assert len(xlsx_files) > 0
 
 # pick one file
 path = xlsx_files[0]
+print(path)
 # %%
 
 print(f"Loading raw file: {path}\n")
 
-df = load_raw_df(path)
+obd = OBDFile.from_xlsx(path)
+
+df = obd.full_df
+# %%
 
 print(f"Shape: {df.shape[0]} rows x {df.shape[1]} columns\n")
 
+# %%
 print("── Columns, dtypes, and non-null counts ─────────────────────────────────")
 for col in df.columns:
     n_non_null = df[col].notna().sum()
@@ -58,6 +63,7 @@ for col in df.columns:
         f"  {col!r:50s}  dtype={str(df[col].dtype):8s}  non-null={n_non_null}/{len(df)}{dash_note}"
     )
 
+# %%
 print("\n── First 5 rows (key OBD columns) ──────────────────────────────────────")
 key_cols = [
     c
@@ -74,7 +80,7 @@ key_cols = [
     )
 ]
 print(df[key_cols].head(5).to_string())
-
+# %%
 print("\n── Sample unique values per key column ─────────────────────────────────")
 for col in key_cols:
     sample = df[col].dropna().unique()[:5].tolist()

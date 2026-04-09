@@ -16,7 +16,9 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from drive_cycle_calculator._schema import CURATED_COLS, _gps_to_duration_seconds
+from drive_cycle_calculator._schema import CURATED_COLS
+from drive_cycle_calculator.misc import _gps_to_duration_seconds, parse_gps_time_torque
+
 
 if TYPE_CHECKING:
     from drive_cycle_calculator.processing_config import ProcessingConfig
@@ -168,6 +170,36 @@ class OBDFile:
         table = table.replace_schema_metadata(new_meta)
         pq.write_table(table, path)
 
+    def to_parquet_optimised(self, path: str | Path) -> None:
+        """Write the full archive to a Parquet file (v2 format).
+
+        TODO: substitute with current implementation. This results in a reduction by 25 to 30% on disk.
+
+        """
+        path = Path(path)
+
+        df_withdt = self._df.copy()
+        df_withdt["GPS Time"] = parse_gps_time_torque(df_withdt["GPS Time"])
+        df_withdt[" Device Time"] = parse_gps_time_torque(df_withdt[" Device Time"])
+
+        table = pa.Table.from_pandas(df_withdt)
+        existing_meta = table.schema.metadata or {}
+        new_meta = {**existing_meta, _FORMAT_VERSION_KEY: _FORMAT_VERSION.encode()}
+        table = table.replace_schema_metadata(new_meta)
+
+        columns_for_dict = [
+            col for col in table.column_names if col not in ["GPS Time", " Device Time"]
+        ]
+
+        pq.write_table(
+            table,
+            "gps_time_parsed_opt.parquet",
+            compression="zstd",
+            use_dictionary=columns_for_dict,
+            write_statistics=True,
+            version="2.6",
+        )
+
     # ── Properties ────────────────────────────────────────────────────────────
 
     @property
@@ -179,6 +211,11 @@ class OBDFile:
         """
         present = [c for c in CURATED_COLS if c in self._df.columns]
         return self._df[present].copy()
+
+    @property
+    def full_df(self) -> pd.DataFrame:
+        """Return the full raw DataFrame."""
+        return self._df.copy()
 
     # ── Quality reporting ─────────────────────────────────────────────────────
 
@@ -332,8 +369,7 @@ def _sniff_separator(path: Path) -> str:
         if candidates:
             return candidates[0][1]
         raise ValueError(
-            f"Cannot detect separator in {path.name}. "
-            f"Pass sep= explicitly (e.g. sep=',', sep=';')."
+            f"Cannot detect separator in {path.name}. Pass sep= explicitly (e.g. sep=',', sep=';')."
         )
 
 
