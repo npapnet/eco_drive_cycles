@@ -13,7 +13,7 @@ from functools import cached_property
 import pandas as pd
 
 from drive_cycle_calculator._schema import OBD_COLUMN_MAP
-from drive_cycle_calculator.misc import _gps_to_duration_seconds
+from drive_cycle_calculator.gps_time_parser import GpsTimeParser
 
 
 @dataclasses.dataclass
@@ -51,7 +51,8 @@ class ProcessingConfig:
             Note: speed_ms, acceleration_ms2, deceleration_ms2 are NOT produced —
             they are redundant and were removed in the v2 pipeline.
         """
-        elapsed_s = _gps_to_duration_seconds(curated_df["GPS Time"])
+        parser = GpsTimeParser()
+        elapsed_s = parser.to_duration_seconds(curated_df["GPS Time"])
 
         speed_raw = pd.to_numeric(curated_df["Speed (OBD)(km/h)"], errors="coerce")
         smooth_speed = speed_raw.rolling(

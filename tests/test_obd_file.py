@@ -348,15 +348,12 @@ class TestQualityReport:
         assert np.isnan(report["speed_max_kmh"])
 
     def test_empty_df(self):
-        """quality_report handles empty DataFrame without raising.
-
-        it should report a ValueError
-        """
+        """quality_report handles empty DataFrame without raising."""
         df = pd.DataFrame(columns=CURATED_COLS)
         obd = OBDFile(df, "empty")
-        with pytest.raises(IndexError, match="single positional indexer is out-of-bounds"):
-            obd.quality_report()
-
+        report = obd.quality_report()
+        assert report["row_count"] == 0
+        assert report["gps_gap_count"] == 0
 
 # ── to_trip ───────────────────────────────────────────────────────────────────
 

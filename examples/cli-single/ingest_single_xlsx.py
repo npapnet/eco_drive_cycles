@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 
 from drive_cycle_calculator.obd_file import OBDFile
-from drive_cycle_calculator.misc import parse_gps_time_torque
+from drive_cycle_calculator.gps_time_parser import GpsTimeParser
 
 # %%
 
@@ -50,6 +50,8 @@ obd = OBDFile.from_xlsx(path)
 
 df = obd.full_df
 # %%
+df["GPS Time"].dtype
+# %%
 obd.quality_report()
 
 # %%
@@ -62,8 +64,9 @@ obd._df.iloc[0, 0]
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+parser = GpsTimeParser()
 df_withdt = obd._df.copy()
-df_withdt["GPS Time"] = parse_gps_time_torque(df_withdt["GPS Time"])
+df_withdt["GPS Time"] = parser.to_datetime(df_withdt["GPS Time"])
 # df_withdt[" Device Time"] = parse_gps_time_torque(df_withdt[" Device Time"])
 
 table = pa.Table.from_pandas(df_withdt)

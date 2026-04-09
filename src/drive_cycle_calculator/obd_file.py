@@ -17,7 +17,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from drive_cycle_calculator._schema import CURATED_COLS
-from drive_cycle_calculator.misc import _gps_to_duration_seconds, parse_gps_time_torque
+from drive_cycle_calculator.gps_time_parser import GpsTimeParser
 
 
 if TYPE_CHECKING:
@@ -179,8 +179,9 @@ class OBDFile:
         path = Path(path)
 
         df_withdt = self._df.copy()
-        df_withdt["GPS Time"] = parse_gps_time_torque(df_withdt["GPS Time"])
-        df_withdt[" Device Time"] = parse_gps_time_torque(df_withdt[" Device Time"])
+        parser = GpsTimeParser()
+        df_withdt["GPS Time"] = parser.to_datetime(df_withdt["GPS Time"])
+        df_withdt[" Device Time"] = parser.to_datetime(df_withdt[" Device Time"])
 
         table = pa.Table.from_pandas(df_withdt)
         existing_meta = table.schema.metadata or {}
@@ -253,7 +254,8 @@ class OBDFile:
         # GPS gap count: gaps > 5 s between consecutive valid timestamps
         gps_gap_count = 0
         if "GPS Time" in df.columns:
-            elapsed = _gps_to_duration_seconds(df["GPS Time"])
+            parser = GpsTimeParser()
+            elapsed = parser.to_duration_seconds(df["GPS Time"])
             valid = elapsed.dropna()
             if len(valid) > 1:
                 gaps = valid.diff().dropna()

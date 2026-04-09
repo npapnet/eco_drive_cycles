@@ -42,16 +42,13 @@ the permanent source of truth; processed DataFrames are always derived from it.
 src/drive_cycle_calculator/
 ├── __init__.py              — version string only
 ├── _schema.py               — OBD_COLUMN_MAP, CURATED_COLS  (no package imports)
-├── misc.py                  — _gps_to_duration_seconds, parse_gps_time_torque
+├── gps_time_parser.py       — Converts GPS time in various forms to datetime objects and duration seconds
 ├── obd_file.py              — OBDFile
 ├── processing_config.py     — ProcessingConfig, DEFAULT_CONFIG
 └── metrics/
     ├── __init__.py          — re-exports Trip, TripCollection, similarity, load_raw_df
     ├── trip.py              — Trip
-    ├── trip_collection.py   — TripCollection
-    ├── _computations.py     — process_raw_df, load_raw_df, gps_to_duration_seconds,
-    │                          smooth_and_derive, _SEVEN_METRIC_KEYS
-    └── _similarity_calcs.py — similarity()
+    └── trip_collection.py   — TripCollection, similarity()
 ```
 
 ---
@@ -325,9 +322,7 @@ tc.to_duckdb_catalog(db_path)
 
 | # | Item | Location |
 |---|------|----------|
-| 1 | `misc._gps_to_duration_seconds()` and `_computations.gps_to_duration_seconds()` are near-duplicates; consolidation deferred | `misc.py`, `_computations.py` |
-| 2 | `OBDFile.to_parquet_optimised()` is incomplete (hardcoded output path, TODO comment) | `obd_file.py` |
-| 3 | `Trip.microtrips` raises `NotImplementedError` — P1 in TODOS.md | `trip.py` |
-| 4 | `misc.py` has no docstring header and functions lack public/private consistency (`_gps_to_duration_seconds` is private-named but used externally) | `misc.py` |
+| 1 | `OBDFile.to_parquet_optimised()` is incomplete (hardcoded output path, TODO comment) | `obd_file.py` |
+| 2 | `Trip.microtrips` raises `NotImplementedError` — P1 in TODOS.md | `trip.py` |
 
 
