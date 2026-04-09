@@ -1,93 +1,11 @@
 # TODOS
 
-## ~~P1 — OBDFile + ProcessingConfig refactor~~ ✓ DONE
-
-**What:** Two-stage archive pipeline. `OBDFile` wraps a raw OBD xlsx/CSV/Parquet file.
-`ProcessingConfig` (dataclass with `window` and `stop_threshold_kmh`) applies smoothing,
-acceleration derivation, and column renaming via `apply(curated_df)`. `DEFAULT_CONFIG`
-is `ProcessingConfig(window=4)`.
-
-**Shipped:**
-- `src/drive_cycle_calculator/_schema.py` — `OBD_COLUMN_MAP`, `CURATED_COLS`
-- `src/drive_cycle_calculator/misc.py` — `_gps_to_duration_seconds`, `parse_gps_time_torque`
-- `src/drive_cycle_calculator/obd_file.py` — `OBDFile.from_xlsx/from_csv/from_parquet`, `to_parquet` (v2 format), `curated_df`, `quality_report`, `to_trip`
-- `src/drive_cycle_calculator/processing_config.py` — `ProcessingConfig`, `config_hash`, `DEFAULT_CONFIG`
-- `src/drive_cycle_calculator/metrics/trip_collection.py` — `TripCollection` extracted from `trip.py`; adds `from_folder_raw`, `from_archive_parquets`, `from_duckdb_catalog` (eager via OBDFile)
-- `scripts/migrate_to_archive.py` — one-shot xlsx → v2 Parquet converter
-- `examples/cli/ingest.py` — two-stage ingest workflow
-- 129 tests passing
-
-**Processed DataFrame columns** (output of `ProcessingConfig.apply()`):
-`elapsed_s`, `smooth_speed_kmh`, `acc_ms2`, `speed_kmh`, `co2_g_per_km`, `engine_load_pct`, `fuel_flow_lph`.
-Note: `speed_ms`, `acceleration_ms2`, `deceleration_ms2` were removed as redundant.
-
----
-
-## ~~P1 — Remove legacy code from _computations.py~~ ✓ DONE
-
-**Removed:** `process_raw_df()`, `load_raw_df()`, `smooth_and_derive()`, `_SEVEN_METRIC_KEYS`,
-`_REQUIRED_RAW_COLS` from `_computations.py`. `_similarity_calcs.py` module folded into
-`trip_collection.py`. `similarity()` and `_SEVEN_METRIC_KEYS` now live in `trip_collection.py`.
-
-**Remaining in `_computations.py`:** only `gps_to_duration_seconds()` (general-purpose,
-used in `test_calculations.py`).
-
----
-
-## ~~P2~~ → ~~P1 — Migrate internal column names from Greek to English~~ ✓ DONE
-
-Internal package code uses English column names. DriveGUI Excel output remains Greek (user-facing).
-
----
-
-## ~~P1 — Parquet + DuckDB persistence layer~~ ✓ DONE
-
-**Current storage layout:**
-```
-data/
-  trips/
-    trackLog-2019-Sep-16_10-58-16.parquet   # v2 archive (raw OBD columns)
-    trackLog-2019-Sep-16_18-45-06.parquet
-    …
-  metadata.duckdb                           # catalog: trip_metadata table
-```
-
-`TripCollection.from_archive_parquets()` is the canonical constructor.
-`TripCollection.from_parquet()` (v1 processed Parquets) is deprecated, kept for backward compat.
-
----
-
-## ~~P1 — Examples directory (CLI + GUI)~~ ✓ DONE
-
-- `examples/cli/ingest.py` — two-stage ingest: `from_folder_raw` → `OBDFile.to_parquet` → `from_archive_parquets` → `to_duckdb_catalog`
-- `examples/cli/analyze.py` — loads from catalog → prints similarity scores + representative trip
-- `examples/gui/main.py` — Tkinter + Matplotlib GUI with scrollable log pane; three buttons:
-  "Import raw xlsx → write archive", "Load existing archive parquets", "Reload from catalog"
-- `examples/README.md`, `examples/cli/README.md`, `examples/gui/README.md`
-
----
-
-## ~~P2 — Freeze DriveGUI and restore self-sufficiency~~ ✓ DONE
-
-`students/DriveGUI/` is frozen. No imports from `src/drive_cycle_calculator`. See `students/DriveGUI/README.md` for the FROZEN notice.
-
----
-
-## ~~P1 — Remove os.chdir() from short_excel.py~~ ✓ DONE
-
----
-
 ## P1 — Clean up remaining legacy code
 
 **What:** Several legacy items remain in the codebase that should be removed:
 
-1. **`smooth_and_derive()` in `processing_config.py`** — marked `TODO: Remove from codebase`. Used only by `TestSmoothAndDerive` in `test_processing_config.py`. Both the function and its test class should be deleted.
-2. **`TripCollection.from_parquet()`** — deprecated, reads old v1 processed Parquets. No tests reference it except backward-compat ones. Remove method and update any remaining tests.
-3. **`_computations.gps_to_duration_seconds()`** — near-duplicate of `misc._gps_to_duration_seconds()`. The two differ slightly (one handles numeric series; the other is Torque-string-specific). Consolidate into one canonical function and remove the other.
-4. **`OBDFile.to_parquet_optimised()`** — incomplete: hardcoded output filename `"gps_time_parsed_opt.parquet"` instead of the `path` argument. Either fix properly or remove.
-5. **`misc.py` housekeeping** — no module docstring; `_gps_to_duration_seconds` is private-named but imported by `processing_config.py`. Rename to public API or document explicitly.
+1. **`OBDFile.to_parquet_optimised()`** — incomplete: hardcoded output filename `"gps_time_parsed_opt.parquet"` instead of the `path` argument. Either fix properly or remove.
 
-**Effort:** S (human: ~2 hrs / CC: ~15 min)
 
 ---
 
@@ -210,3 +128,90 @@ data/
 **Effort:** S (human: ~4 hrs / CC: ~15 min)
 
 **Depends on:** Parquet + DuckDB persistence layer ✓.
+
+
+# DONE 
+
+## ~~P1 — OBDFile + ProcessingConfig refactor~~ ✓ DONE
+
+**What:** Two-stage archive pipeline. `OBDFile` wraps a raw OBD xlsx/CSV/Parquet file.
+`ProcessingConfig` (dataclass with `window` and `stop_threshold_kmh`) applies smoothing,
+acceleration derivation, and column renaming via `apply(curated_df)`. `DEFAULT_CONFIG`
+is `ProcessingConfig(window=4)`.
+
+**Shipped:**
+- `src/drive_cycle_calculator/_schema.py` — `OBD_COLUMN_MAP`, `CURATED_COLS`
+- `src/drive_cycle_calculator/misc.py` — `_gps_to_duration_seconds`, `parse_gps_time_torque`
+- `src/drive_cycle_calculator/obd_file.py` — `OBDFile.from_xlsx/from_csv/from_parquet`, `to_parquet` (v2 format), `curated_df`, `quality_report`, `to_trip`
+- `src/drive_cycle_calculator/processing_config.py` — `ProcessingConfig`, `config_hash`, `DEFAULT_CONFIG`
+- `src/drive_cycle_calculator/metrics/trip_collection.py` — `TripCollection` extracted from `trip.py`; adds `from_folder_raw`, `from_archive_parquets`, `from_duckdb_catalog` (eager via OBDFile)
+- `scripts/migrate_to_archive.py` — one-shot xlsx → v2 Parquet converter
+- `examples/cli/ingest.py` — two-stage ingest workflow
+- 129 tests passing
+
+**Processed DataFrame columns** (output of `ProcessingConfig.apply()`):
+`elapsed_s`, `smooth_speed_kmh`, `acc_ms2`, `speed_kmh`, `co2_g_per_km`, `engine_load_pct`, `fuel_flow_lph`.
+Note: `speed_ms`, `acceleration_ms2`, `deceleration_ms2` were removed as redundant.
+
+---
+
+## ~~P1 — Remove legacy code from _computations.py~~ ✓ DONE
+
+**Removed:** `process_raw_df()`, `load_raw_df()`, `smooth_and_derive()`, `_SEVEN_METRIC_KEYS`,
+`_REQUIRED_RAW_COLS` from `_computations.py`. `_similarity_calcs.py` module folded into
+`trip_collection.py`. `similarity()` and `_SEVEN_METRIC_KEYS` now live in `trip_collection.py`.
+
+**Remaining in `_computations.py`:** only `gps_to_duration_seconds()` (general-purpose,
+used in `test_calculations.py`).
+
+---
+
+## ~~P2~~ → ~~P1 — Migrate internal column names from Greek to English~~ ✓ DONE
+
+Internal package code uses English column names. DriveGUI Excel output remains Greek (user-facing).
+
+---
+
+## ~~P1 — Parquet + DuckDB persistence layer~~ ✓ DONE
+
+**Current storage layout:**
+```
+data/
+  trips/
+    trackLog-2019-Sep-16_10-58-16.parquet   # v2 archive (raw OBD columns)
+    trackLog-2019-Sep-16_18-45-06.parquet
+    …
+  metadata.duckdb                           # catalog: trip_metadata table
+```
+
+`TripCollection.from_archive_parquets()` is the canonical constructor.
+`TripCollection.from_parquet()` (v1 processed Parquets) is deprecated, kept for backward compat.
+
+---
+
+## ~~P1 — Examples directory (CLI + GUI)~~ ✓ DONE
+
+- `examples/cli/ingest.py` — two-stage ingest: `from_folder_raw` → `OBDFile.to_parquet` → `from_archive_parquets` → `to_duckdb_catalog`
+- `examples/cli/analyze.py` — loads from catalog → prints similarity scores + representative trip
+- `examples/gui/main.py` — Tkinter + Matplotlib GUI with scrollable log pane; three buttons:
+  "Import raw xlsx → write archive", "Load existing archive parquets", "Reload from catalog"
+- `examples/README.md`, `examples/cli/README.md`, `examples/gui/README.md`
+
+---
+
+## ~~P2 — Freeze DriveGUI and restore self-sufficiency~~ ✓ DONE
+
+`students/DriveGUI/` is frozen. No imports from `src/drive_cycle_calculator`. See `students/DriveGUI/README.md` for the FROZEN notice.
+
+---
+
+## ~~P1 — Remove os.chdir() from short_excel.py~~ ✓ DONE
+
+---
+
+## ~~~P1 — Clean up remaining legacy code~~~ ✓ DONE
+
+1. **`smooth_and_derive()` in `processing_config.py`** — marked `TODO: Remove from codebase`. Used only by `TestSmoothAndDerive` in `test_processing_config.py`. Both the function and its test class should be deleted.
+2. **`_computations.gps_to_duration_seconds()`** — near-duplicate of `misc._gps_to_duration_seconds()`. Replaced with GpsTimeParser Class
+3. **`misc.py` housekeeping** — no module docstring; `_gps_to_duration_seconds` is private-named but imported by `processing_config.py`. Rename to public API or document explicitly.
+4. **`TripCollection.from_parquet()`** — deprecated, reads old v1 processed Parquets. No tests reference it except backward-compat ones. Remove method and update any remaining tests.
