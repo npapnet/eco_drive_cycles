@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import time
-import zipfile
 from pathlib import Path
 
 import numpy as np
@@ -11,9 +9,7 @@ import pandas as pd
 import pytest
 
 from drive_cycle_calculator.metrics import Trip, TripCollection, load_raw_df
-from drive_cycle_calculator.metrics._computations import (
-    process_raw_df,
-)
+from drive_cycle_calculator.metrics._computations import process_raw_df
 
 # ────────────────────────────────────────────────────────────────
 # Fixtures / helpers
@@ -143,7 +139,7 @@ class TestTrip:
 # ────────────────────────────────────────────────────────────────
 
 
-class TestTripCollection:
+class TestTripCollectionClass:
     def test_from_folder_reads_raw_xlsx(self, tmp_path):
         raw_df = _make_raw_df()
         _write_raw_xlsx(tmp_path / "session.xlsx", raw_df)
@@ -323,9 +319,6 @@ class TestLoadRawDf:
         """load_raw_df raises FileNotFoundError when path is a directory."""
         with pytest.raises(FileNotFoundError):
             load_raw_df(tmp_path)
-
-
-
 
 
 # ────────────────────────────────────────────────────────────────

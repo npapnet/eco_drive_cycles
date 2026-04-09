@@ -17,10 +17,8 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
-from drive_cycle_calculator.metrics._computations import (
-    _SEVEN_METRIC_KEYS,
-    similarity,
-)
+from drive_cycle_calculator.metrics._computations import _SEVEN_METRIC_KEYS
+from drive_cycle_calculator.metrics._similarity_calcs import similarity
 from drive_cycle_calculator.metrics.trip import Trip
 
 if TYPE_CHECKING:

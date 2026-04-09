@@ -5,12 +5,6 @@
 # A. PRIVATE HELPERS — used internally by Trip and TripCollection.
 #    Named with leading underscore.  Not part of the public API.
 #
-# B. PUBLIC FLAT FUNCTIONS — duplicated from students/DriveGUI/metrics.py
-#    for backward compatibility.  Re-exported by metrics/__init__.py so that
-#    existing tests and callers keep working after conftest.py is deleted.
-#
-#    Transitional: once students/DriveGUI migrates to import from this package,
-#    these copies can be removed and the flat layout updated to re-export from here.
 
 from __future__ import annotations
 
@@ -36,9 +30,6 @@ _SEVEN_METRIC_KEYS = (
     "mean_dec",
 )
 
-
-
-
 _REQUIRED_RAW_COLS = [
     "GPS Time",
     "Speed (OBD)(km/h)",
@@ -46,72 +37,6 @@ _REQUIRED_RAW_COLS = [
     "Engine Load(%)",
     "Fuel flow rate/hour(l/hr)",
 ]
-
-
-def compute_session_metrics(df: pd.DataFrame, stop_threshold_kmh: float = 2.0) -> dict:
-    """Compute the 7 representative-route metrics for a single processed DataFrame.
-
-    Returns a dict with keys: duration, mean_speed, mean_ns, stops, stop_pct,
-    mean_acc, mean_dec.
-
-    Missing columns return NaN rather than raising.
-    """
-    duration = float(df["elapsed_s"].dropna().max()) if "elapsed_s" in df.columns else np.nan
-
-    # Speed: prefer smooth_speed_kmh (new pipeline); fall back to speed_ms (old pipeline).
-    if "smooth_speed_kmh" in df.columns:
-        speed_kmh = pd.to_numeric(df["smooth_speed_kmh"], errors="coerce").dropna()
-    elif "speed_ms" in df.columns:
-        speed_kmh = pd.to_numeric(df["speed_ms"], errors="coerce").dropna() * 3.6
-    else:
-        speed_kmh = pd.Series(dtype=float)
-    mean_speed = float(speed_kmh.mean()) if not speed_kmh.empty else 0.0
-
-    moving = speed_kmh[speed_kmh > stop_threshold_kmh]
-    mean_ns = float(moving.mean()) if not moving.empty else 0.0
-
-    total_rows = len(speed_kmh)
-    stops = int((speed_kmh <= stop_threshold_kmh).sum())
-    stop_pct = (stops / total_rows * 100) if total_rows else 0.0
-
-    # Acceleration: prefer acc_ms2 (new pipeline); fall back to split columns (old pipeline).
-    if "acc_ms2" in df.columns:
-        acc = pd.to_numeric(df["acc_ms2"], errors="coerce")
-        mean_acc = float(acc.where(acc > 0).mean())
-        mean_dec = float(acc.where(acc < 0).mean())
-    else:
-        mean_acc = (
-            float(pd.to_numeric(df["acceleration_ms2"], errors="coerce").mean())
-            if "acceleration_ms2" in df.columns
-            else np.nan
-        )
-        mean_dec = (
-            float(pd.to_numeric(df["deceleration_ms2"], errors="coerce").mean())
-            if "deceleration_ms2" in df.columns
-            else np.nan
-        )
-
-    return dict(
-        duration=duration,
-        mean_speed=mean_speed,
-        mean_ns=mean_ns,
-        stops=stops,
-        stop_pct=stop_pct,
-        mean_acc=mean_acc,
-        mean_dec=mean_dec,
-    )
-
-
-def similarity(overall_val: float, rep_val: float) -> float:
-    """% similarity between a representative value and the overall mean.
-
-    Returns a value in [0, 100]. Perfect match returns 100.0.
-    """
-    if np.isnan(overall_val):
-        return 0.0
-    if overall_val == 0:
-        return 100.0 if rep_val == 0 else 0.0
-    return max(0.0, 100.0 - abs(rep_val - overall_val) / abs(overall_val) * 100)
 
 
 def gps_to_duration_seconds(gps_series: pd.Series) -> pd.Series:
@@ -189,9 +114,6 @@ def process_raw_df(df_raw: pd.DataFrame) -> pd.DataFrame:
     )
 
 
-
-
-
 def load_raw_df(path: str | Path) -> pd.DataFrame:
     """Load a raw OBD xlsx file exactly as Torque exported it — no processing.
 
@@ -224,5 +146,3 @@ def load_raw_df(path: str | Path) -> pd.DataFrame:
     if not path.is_file():
         raise FileNotFoundError(f"File not found or not a file: {path}")
     return pd.read_excel(path)
-
-

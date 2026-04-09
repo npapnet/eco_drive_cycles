@@ -15,7 +15,7 @@ Example:
 """
 
 # %%
-import sys
+# import sys
 from pathlib import Path
 
 from drive_cycle_calculator.obd_file import OBDFile

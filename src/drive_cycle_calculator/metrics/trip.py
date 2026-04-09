@@ -13,7 +13,6 @@ from pathlib import Path
 
 import pandas as pd
 
-from drive_cycle_calculator.metrics._computations import compute_session_metrics
 
 
 class Trip:
@@ -77,7 +76,53 @@ class Trip:
         Keys: duration, mean_speed, mean_ns, stops, stop_pct, mean_acc, mean_dec.
         Missing source columns return NaN rather than raising.
         """
-        return compute_session_metrics(self._df, self.stop_threshold_kmh)
+        df = self._df
+        stop_threshold_kmh = self.stop_threshold_kmh
+        
+        duration = float(df["elapsed_s"].dropna().max()) if "elapsed_s" in df.columns else float("nan")
+
+        # Speed: prefer smooth_speed_kmh (new pipeline); fall back to speed_ms (old pipeline).
+        if "smooth_speed_kmh" in df.columns:
+            speed_kmh = pd.to_numeric(df["smooth_speed_kmh"], errors="coerce").dropna()
+        elif "speed_ms" in df.columns:
+            speed_kmh = pd.to_numeric(df["speed_ms"], errors="coerce").dropna() * 3.6
+        else:
+            speed_kmh = pd.Series(dtype=float)
+        mean_speed = float(speed_kmh.mean()) if not speed_kmh.empty else 0.0
+
+        moving = speed_kmh[speed_kmh > stop_threshold_kmh]
+        mean_ns = float(moving.mean()) if not moving.empty else 0.0
+
+        total_rows = len(speed_kmh)
+        stops = int((speed_kmh <= stop_threshold_kmh).sum())
+        stop_pct = (stops / total_rows * 100) if total_rows else 0.0
+
+        # Acceleration: prefer acc_ms2 (new pipeline); fall back to split columns (old pipeline).
+        if "acc_ms2" in df.columns:
+            acc = pd.to_numeric(df["acc_ms2"], errors="coerce")
+            mean_acc = float(acc.where(acc > 0).mean())
+            mean_dec = float(acc.where(acc < 0).mean())
+        else:
+            mean_acc = (
+                float(pd.to_numeric(df["acceleration_ms2"], errors="coerce").mean())
+                if "acceleration_ms2" in df.columns
+                else float("nan")
+            )
+            mean_dec = (
+                float(pd.to_numeric(df["deceleration_ms2"], errors="coerce").mean())
+                if "deceleration_ms2" in df.columns
+                else float("nan")
+            )
+
+        return dict(
+            duration=duration,
+            mean_speed=mean_speed,
+            mean_ns=mean_ns,
+            stops=stops,
+            stop_pct=stop_pct,
+            mean_acc=mean_acc,
+            mean_dec=mean_dec,
+        )
 
     @cached_property
     def duration(self) -> float:

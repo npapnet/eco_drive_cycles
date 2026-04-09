@@ -1,10 +1,7 @@
 import pytest
 import numpy as np
 import pandas as pd
-from drive_cycle_calculator.metrics import (
-    similarity,
-    compute_session_metrics,
-)
+from drive_cycle_calculator.metrics import similarity, Trip
 
 
 # ────────────────────────────────────────────────────────────────
@@ -41,13 +38,13 @@ class TestSimilarity:
 
 
 # ────────────────────────────────────────────────────────────────
-# compute_session_metrics
+# Trip.metrics  (was: compute_session_metrics)
 # ────────────────────────────────────────────────────────────────
 
 
-class TestComputeSessionMetrics:
-    def _make_df(self, **kwargs):
-        return pd.DataFrame(kwargs)
+class TestTripSessionMetrics:
+    """compute_session_metrics was inlined into Trip.metrics.
+    These tests exercise the same logic via Trip."""
 
     def test_happy_path(self):
         df = pd.DataFrame(
@@ -58,7 +55,7 @@ class TestComputeSessionMetrics:
                 "deceleration_ms2": [-0.2, -0.4],
             }
         )
-        result = compute_session_metrics(df, stop_threshold_kmh=2.0)
+        result = Trip(df, "t", stop_threshold_kmh=2.0).metrics
         assert result["duration"] == pytest.approx(600.0)
         assert result["mean_speed"] == pytest.approx(8.5 * 3.6, abs=0.01)
         assert result["mean_acc"] == pytest.approx(0.4, abs=0.01)
@@ -66,12 +63,12 @@ class TestComputeSessionMetrics:
 
     def test_missing_duration_gives_nan(self):
         df = pd.DataFrame({"speed_ms": [5.0, 6.0]})
-        result = compute_session_metrics(df)
+        result = Trip(df, "t").metrics
         assert np.isnan(result["duration"])
 
     def test_missing_acceleration_gives_nan(self):
         df = pd.DataFrame({"speed_ms": [5.0, 6.0]})
-        result = compute_session_metrics(df)
+        result = Trip(df, "t").metrics
         assert np.isnan(result["mean_acc"])
         assert np.isnan(result["mean_dec"])
 
@@ -79,6 +76,6 @@ class TestComputeSessionMetrics:
         # 2 of 4 values are below 2.0 km/h → 50%
         # values in m/s: 0.1 m/s = 0.36 km/h (below 2.0), 5.0 m/s = 18 km/h
         df = pd.DataFrame({"speed_ms": [0.1, 5.0, 0.1, 5.0]})
-        result = compute_session_metrics(df, stop_threshold_kmh=2.0)
+        result = Trip(df, "t", stop_threshold_kmh=2.0).metrics
         assert result["stop_pct"] == pytest.approx(50.0)
         assert result["stops"] == 2
