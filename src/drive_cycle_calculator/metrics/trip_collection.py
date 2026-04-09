@@ -163,53 +163,13 @@ class TripCollection:
                 warnings.warn(f"Skipping {parquet_path.name}: {exc}", stacklevel=2)
         return cls(trips)
 
-    # ── Parquet persistence (legacy — use OBDFile.to_parquet for archives) ────
+    # ── Parquet helpers ───────────────────────────────────────────────────────
 
     @staticmethod
     def _sanitise_name(name: str) -> str:
         """Replace filesystem-unsafe characters with '_'."""
         return re.sub(r"[^\w\-.]", "_", name)
 
-    def to_parquet(self, directory: str | Path, overwrite: bool = True) -> None:
-        """Write each trip's processed DataFrame as a Parquet file.
-
-        .. deprecated::
-            This method writes processed (derived) DataFrames. For new workflows,
-            use OBDFile.to_parquet() to write raw archive Parquets, then
-            from_archive_parquets() to reload them.
-
-        Raises
-        ------
-        ValueError
-            If two trips produce the same sanitised filename.
-        FileNotFoundError
-            If directory does not exist.
-        """
-        warnings.warn(
-            "TripCollection.to_parquet() is deprecated. Use OBDFile.to_parquet() "
-            "to write raw archive Parquets, then from_archive_parquets() to reload.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        directory = Path(directory)
-        if not directory.exists():
-            raise FileNotFoundError(f"Directory not found: {directory}")
-
-        sanitised = [self._sanitise_name(t.name) for t in self.trips]
-        if len(sanitised) != len(set(sanitised)):
-            from collections import Counter
-
-            dupes = [n for n, c in Counter(sanitised).items() if c > 1]
-            raise ValueError(
-                f"Name collision after sanitisation: {dupes}. Rename source trips before ingesting."
-            )
-
-        for trip, stem in zip(self.trips, sanitised):
-            path = directory / f"{stem}.parquet"
-            if path.exists() and not overwrite:
-                raise ValueError(f"File already exists: {path}. Pass overwrite=True.")
-            trip._df.to_parquet(path, index=True)
-            trip._path = path
 
     @classmethod
     def from_parquet(cls, directory: str | Path) -> "TripCollection":

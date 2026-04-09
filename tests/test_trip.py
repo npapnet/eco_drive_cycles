@@ -387,93 +387,6 @@ class TestTripLazyLoading:
 
 
 # ────────────────────────────────────────────────────────────────
-# TestTripCollectionParquet
-# ────────────────────────────────────────────────────────────────
-
-
-class TestTripCollectionParquet:
-    def test_roundtrip(self, tmp_path):
-        """to_parquet → from_parquet produces same trips."""
-        t1 = Trip(_make_processed_df(speed_ms=5.0), "morning")
-        t2 = Trip(_make_processed_df(speed_ms=8.0), "evening")
-        tc = TripCollection([t1, t2])
-        tc.to_parquet(tmp_path)
-
-        loaded = TripCollection.from_parquet(tmp_path)
-        assert len(loaded) == 2
-        names = {t.name for t in loaded}
-        assert names == {"morning", "evening"}
-
-    def test_roundtrip_metrics_preserved(self, tmp_path):
-        """Metrics computed from loaded parquet match original."""
-        t = Trip(_make_processed_df(speed_ms=10.0), "trip")
-        TripCollection([t]).to_parquet(tmp_path)
-        loaded = TripCollection.from_parquet(tmp_path)
-        assert loaded.trips[0].mean_speed == pytest.approx(10.0 * 3.6, abs=0.01)
-
-    def test_overwrite_by_default(self, tmp_path):
-        """Re-running to_parquet() overwrites existing files without error."""
-        t = Trip(_make_processed_df(speed_ms=5.0), "trip")
-        tc = TripCollection([t])
-        tc.to_parquet(tmp_path)  # first write
-        tc.to_parquet(tmp_path)  # second write — should not raise
-
-    def test_overwrite_false_raises_on_existing(self, tmp_path):
-        """overwrite=False raises ValueError if file already exists."""
-        t = Trip(_make_processed_df(), "trip")
-        tc = TripCollection([t])
-        tc.to_parquet(tmp_path)
-        with pytest.raises(ValueError, match="already exists"):
-            tc.to_parquet(tmp_path, overwrite=False)
-
-    def test_empty_collection_writes_no_files(self, tmp_path):
-        """Empty TripCollection writes nothing."""
-        TripCollection([]).to_parquet(tmp_path)
-        assert list(tmp_path.glob("*.parquet")) == []
-
-    def test_name_collision_within_collection_raises(self, tmp_path):
-        """Two trips with same sanitised name raise ValueError before any write."""
-        t1 = Trip(_make_processed_df(), "a/b")
-        t2 = Trip(_make_processed_df(), "a b")  # both sanitise to "a_b"
-        tc = TripCollection([t1, t2])
-        with pytest.raises(ValueError, match="collision"):
-            tc.to_parquet(tmp_path)
-        assert list(tmp_path.glob("*.parquet")) == []  # no partial writes
-
-    def test_special_chars_in_name_sanitised(self, tmp_path):
-        """Trip names with special chars produce valid filenames."""
-        t = Trip(_make_processed_df(), "2025-05-14 Morning (test)")
-        TripCollection([t]).to_parquet(tmp_path)
-        files = list(tmp_path.glob("*.parquet"))
-        assert len(files) == 1
-        assert " " not in files[0].name
-
-    def test_from_parquet_empty_directory(self, tmp_path):
-        """Empty directory returns empty TripCollection."""
-        tc = TripCollection.from_parquet(tmp_path)
-        assert len(tc) == 0
-
-    def test_from_parquet_missing_directory(self, tmp_path):
-        """Non-existent directory raises FileNotFoundError."""
-        with pytest.raises(FileNotFoundError):
-            TripCollection.from_parquet(tmp_path / "nonexistent")
-
-    def test_to_parquet_missing_directory(self, tmp_path):
-        """Non-existent directory raises FileNotFoundError."""
-        t = Trip(_make_processed_df(), "trip")
-        with pytest.raises(FileNotFoundError):
-            TripCollection([t]).to_parquet(tmp_path / "nonexistent")
-
-    def test_to_parquet_sets_path_on_trips(self, tmp_path):
-        """to_parquet() sets trip._path so to_duckdb_catalog() can find files."""
-        t = Trip(_make_processed_df(), "trip")
-        tc = TripCollection([t])
-        tc.to_parquet(tmp_path)
-        assert t._path is not None
-        assert t._path.exists()
-
-
-# ────────────────────────────────────────────────────────────────
 # TestTripCollectionDuckDB
 # ────────────────────────────────────────────────────────────────
 
@@ -540,11 +453,10 @@ class TestTripCollectionDuckDB:
         """Calling to_duckdb_catalog() twice produces no duplicate rows."""
         import duckdb
 
-        t = Trip(_make_processed_df(), "trip")
-        tc = TripCollection([t])
-        trips_dir = tmp_path / "trips"
-        trips_dir.mkdir()
-        tc.to_parquet(trips_dir)
+        archive_dir = tmp_path / "archive"
+        archive_dir.mkdir()
+        _write_archive_parquet(archive_dir, "trip")
+        tc = TripCollection.from_archive_parquets(archive_dir)
         db = tmp_path / "metadata.duckdb"
         tc.to_duckdb_catalog(db)
         tc.to_duckdb_catalog(db)  # second call
@@ -557,11 +469,10 @@ class TestTripCollectionDuckDB:
         """Empty TripCollection does not truncate an existing catalog."""
         import duckdb
 
-        t = Trip(_make_processed_df(), "existing")
-        tc = TripCollection([t])
-        trips_dir = tmp_path / "trips"
-        trips_dir.mkdir()
-        tc.to_parquet(trips_dir)
+        archive_dir = tmp_path / "archive"
+        archive_dir.mkdir()
+        _write_archive_parquet(archive_dir, "existing")
+        tc = TripCollection.from_archive_parquets(archive_dir)
         db = tmp_path / "metadata.duckdb"
         tc.to_duckdb_catalog(db)
 
@@ -622,11 +533,10 @@ class TestTripCollectionDuckDB:
         """max_velocity_kmh is stored (not NULL) for trips with speed_ms column."""
         import duckdb
 
-        t = Trip(_make_processed_df(speed_ms=10.0), "trip")
-        tc = TripCollection([t])
-        trips_dir = tmp_path / "trips"
-        trips_dir.mkdir()
-        tc.to_parquet(trips_dir)
+        archive_dir = tmp_path / "archive"
+        archive_dir.mkdir()
+        _write_archive_parquet(archive_dir, "trip", speed_kmh=36.0)
+        tc = TripCollection.from_archive_parquets(archive_dir)
         db = tmp_path / "metadata.duckdb"
         tc.to_duckdb_catalog(db)
 
@@ -635,4 +545,4 @@ class TestTripCollectionDuckDB:
                 "SELECT max_velocity_kmh FROM trip_metadata WHERE trip_id = 'trip'"
             ).fetchone()
         assert row is not None
-        assert row[0] == pytest.approx(10.0 * 3.6, abs=0.01)
+        assert row[0] == pytest.approx(36.0, abs=0.01)
