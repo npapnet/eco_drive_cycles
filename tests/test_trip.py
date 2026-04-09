@@ -1,4 +1,5 @@
 """Tests for Trip and TripCollection classes, plus _computations helpers."""
+
 from __future__ import annotations
 
 import time
@@ -19,7 +20,15 @@ from drive_cycle_calculator.metrics._computations import (
 # Fixtures / helpers
 # ────────────────────────────────────────────────────────────────
 
-_SEVEN_METRIC_KEYS = {"duration", "mean_speed", "mean_ns", "stops", "stop_pct", "mean_acc", "mean_dec"}
+_SEVEN_METRIC_KEYS = {
+    "duration",
+    "mean_speed",
+    "mean_ns",
+    "stops",
+    "stop_pct",
+    "mean_acc",
+    "mean_dec",
+}
 
 
 def _make_processed_df(
@@ -28,16 +37,18 @@ def _make_processed_df(
     smooth_col: str = "smooth_speed_kmh",
 ) -> pd.DataFrame:
     """Minimal processed DataFrame matching the post-migration English column format."""
-    return pd.DataFrame({
-        "elapsed_s": list(range(n)),
-        smooth_col: [speed_ms * 3.6] * n,
-        "speed_ms": [speed_ms] * n,
-        "acceleration_ms2": [0.3] * n,
-        "deceleration_ms2": [-0.2] * n,
-        "Engine Load(%)": [50.0] * n,
-        "Fuel flow rate/hour(l/hr)": [2.0] * n,
-        "CO\u2082 in g/km (Average)(g/km)": [120.0] * n,
-    })
+    return pd.DataFrame(
+        {
+            "elapsed_s": list(range(n)),
+            smooth_col: [speed_ms * 3.6] * n,
+            "speed_ms": [speed_ms] * n,
+            "acceleration_ms2": [0.3] * n,
+            "deceleration_ms2": [-0.2] * n,
+            "Engine Load(%)": [50.0] * n,
+            "Fuel flow rate/hour(l/hr)": [2.0] * n,
+            "CO\u2082 in g/km (Average)(g/km)": [120.0] * n,
+        }
+    )
 
 
 def _make_raw_df(
@@ -48,13 +59,15 @@ def _make_raw_df(
 ) -> pd.DataFrame:
     """Minimal raw OBD DataFrame as read directly from an xlsx file."""
     rows = n + 2  # row 0 = header area, row 1 = A2 with timestamp, then data
-    df = pd.DataFrame({
-        "GPS Time": [a2_value] + [gps_start + i for i in range(rows - 1)],
-        "Speed (OBD)(km/h)": [a2_value] + [speed_kmh] * (rows - 1),
-        "CO\u2082 in g/km (Average)(g/km)": [a2_value] + [120.0] * (rows - 1),
-        "Engine Load(%)": [a2_value] + [50.0] * (rows - 1),
-        "Fuel flow rate/hour(l/hr)": [a2_value] + [2.0] * (rows - 1),
-    })
+    df = pd.DataFrame(
+        {
+            "GPS Time": [a2_value] + [gps_start + i for i in range(rows - 1)],
+            "Speed (OBD)(km/h)": [a2_value] + [speed_kmh] * (rows - 1),
+            "CO\u2082 in g/km (Average)(g/km)": [a2_value] + [120.0] * (rows - 1),
+            "Engine Load(%)": [a2_value] + [50.0] * (rows - 1),
+            "Fuel flow rate/hour(l/hr)": [a2_value] + [2.0] * (rows - 1),
+        }
+    )
     return df
 
 
@@ -73,6 +86,7 @@ def _write_raw_xlsx(path: Path, df: pd.DataFrame) -> None:
 # ────────────────────────────────────────────────────────────────
 # TestTrip
 # ────────────────────────────────────────────────────────────────
+
 
 class TestTrip:
     def test_construction_from_dataframe(self):
@@ -129,38 +143,8 @@ class TestTrip:
 # TestTripCollection
 # ────────────────────────────────────────────────────────────────
 
+
 class TestTripCollection:
-    def test_from_excel_reads_all_sheets(self, tmp_path):
-        xlsx = tmp_path / "log.xlsx"
-        _write_processed_xlsx(xlsx, {
-            "2025-05-14_Morning": _make_processed_df(),
-            "2025-05-14_Evening": _make_processed_df(speed_ms=8.0),
-        })
-        tc = TripCollection.from_excel(xlsx)
-        assert len(tc) == 2
-        names = {t.name for t in tc}
-        assert names == {"2025-05-14_Morning", "2025-05-14_Evening"}
-
-    def test_from_excel_skips_empty_sheets(self, tmp_path):
-        xlsx = tmp_path / "log.xlsx"
-        with pd.ExcelWriter(xlsx, engine="openpyxl") as w:
-            _make_processed_df().to_excel(w, sheet_name="Good", index=False)
-            pd.DataFrame().to_excel(w, sheet_name="Empty", index=False)
-        tc = TripCollection.from_excel(xlsx)
-        assert len(tc) == 1
-        assert tc.trips[0].name == "Good"
-
-    def test_from_excel_raises_on_zero_valid_sheets(self, tmp_path):
-        xlsx = tmp_path / "log.xlsx"
-        with pd.ExcelWriter(xlsx, engine="openpyxl") as w:
-            pd.DataFrame().to_excel(w, sheet_name="Empty", index=False)
-        with pytest.raises(ValueError, match="No valid sheets"):
-            TripCollection.from_excel(xlsx)
-
-    def test_from_excel_file_not_found(self, tmp_path):
-        with pytest.raises(Exception):
-            TripCollection.from_excel(tmp_path / "does_not_exist.xlsx")
-
     def test_from_folder_reads_raw_xlsx(self, tmp_path):
         raw_df = _make_raw_df()
         _write_raw_xlsx(tmp_path / "session.xlsx", raw_df)
@@ -254,13 +238,15 @@ _EXPECTED_OUTPUT_COLS = {
 class TestProcessRawDf:
     def _make_valid_raw(self, n: int = 15) -> pd.DataFrame:
         """Raw OBD DataFrame with all required columns."""
-        return pd.DataFrame({
-            "GPS Time": list(range(n)),
-            "Speed (OBD)(km/h)": [30.0] * n,
-            "CO\u2082 in g/km (Average)(g/km)": [120.0] * n,
-            "Engine Load(%)": [50.0] * n,
-            "Fuel flow rate/hour(l/hr)": [2.0] * n,
-        })
+        return pd.DataFrame(
+            {
+                "GPS Time": list(range(n)),
+                "Speed (OBD)(km/h)": [30.0] * n,
+                "CO\u2082 in g/km (Average)(g/km)": [120.0] * n,
+                "Engine Load(%)": [50.0] * n,
+                "Fuel flow rate/hour(l/hr)": [2.0] * n,
+            }
+        )
 
     def test_happy_path_returns_processed_columns(self):
         result = process_raw_df(self._make_valid_raw())
@@ -288,14 +274,16 @@ class TestProcessRawDf:
         Load, Fuel flow) must be float64 after processing.
         """
         n = 5
-        df_raw = pd.DataFrame({
-            "GPS Time": list(range(n)),
-            "Speed (OBD)(km/h)": [30.0] * n,
-            # Mix of '-' strings and real floats, exactly as Torque exports
-            "CO\u2082 in g/km (Average)(g/km)": ["-", "-", 47.5, 53.6, "-"],
-            "Engine Load(%)": ["-", 30.2, 31.8, 30.9, 31.4],
-            "Fuel flow rate/hour(l/hr)": ["-", "-", 0.99, 0.79, "-"],
-        })
+        df_raw = pd.DataFrame(
+            {
+                "GPS Time": list(range(n)),
+                "Speed (OBD)(km/h)": [30.0] * n,
+                # Mix of '-' strings and real floats, exactly as Torque exports
+                "CO\u2082 in g/km (Average)(g/km)": ["-", "-", 47.5, 53.6, "-"],
+                "Engine Load(%)": ["-", 30.2, 31.8, 30.9, 31.4],
+                "Fuel flow rate/hour(l/hr)": ["-", "-", 0.99, 0.79, "-"],
+            }
+        )
         result = process_raw_df(df_raw)
 
         for col in [
@@ -317,6 +305,7 @@ class TestProcessRawDf:
 # ────────────────────────────────────────────────────────────────
 # TestLoadRawDf
 # ────────────────────────────────────────────────────────────────
+
 
 class TestLoadRawDf:
     def test_missing_file_raises_file_not_found(self, tmp_path):
@@ -341,12 +330,11 @@ class TestLoadRawDf:
 # TestInferSheetName
 # ────────────────────────────────────────────────────────────────
 
+
 class TestInferSheetName:
     def _make_df_with_a2(self, a2_value: str) -> pd.DataFrame:
         """DataFrame where iloc[1, 0] contains a2_value."""
-        return pd.DataFrame({
-            "col": ["header_row_0", a2_value, "data", "data"]
-        })
+        return pd.DataFrame({"col": ["header_row_0", a2_value, "data", "data"]})
 
     def test_valid_a2_timestamp_morning(self, tmp_path):
         """Valid A2 timestamp with hour < 12 → Morning."""
@@ -385,6 +373,7 @@ class TestInferSheetName:
 # TestTripMaxSpeed
 # ────────────────────────────────────────────────────────────────
 
+
 class TestTripMaxSpeed:
     def test_returns_max_speed_in_kmh(self):
         df = _make_processed_df(speed_ms=10.0, n=5)
@@ -404,6 +393,7 @@ class TestTripMaxSpeed:
 # ────────────────────────────────────────────────────────────────
 # TestTripLazyLoading
 # ────────────────────────────────────────────────────────────────
+
 
 class TestTripLazyLoading:
     def test_df_none_with_path_loads_on_first_access(self, tmp_path):
@@ -447,6 +437,7 @@ class TestTripLazyLoading:
 # ────────────────────────────────────────────────────────────────
 # TestTripCollectionParquet
 # ────────────────────────────────────────────────────────────────
+
 
 class TestTripCollectionParquet:
     def test_roundtrip(self, tmp_path):
@@ -534,6 +525,7 @@ class TestTripCollectionParquet:
 # TestTripCollectionDuckDB
 # ────────────────────────────────────────────────────────────────
 
+
 def _make_archive_df(n: int = 10, speed_kmh: float = 30.0) -> pd.DataFrame:
     """Minimal raw OBD DataFrame suitable for OBDFile.to_parquet() (v2 archive).
 
@@ -541,18 +533,21 @@ def _make_archive_df(n: int = 10, speed_kmh: float = 30.0) -> pd.DataFrame:
     mixes a string in row 0 with floats. PyArrow requires a uniform column type.
     """
     timestamps = [f"Mon Sep 22 10:30:{i:02d} +0300 2019" for i in range(n)]
-    return pd.DataFrame({
-        "GPS Time": timestamps,
-        "Speed (OBD)(km/h)": [speed_kmh] * n,
-        "CO\u2082 in g/km (Average)(g/km)": [120.0] * n,
-        "Engine Load(%)": [50.0] * n,
-        "Fuel flow rate/hour(l/hr)": [2.0] * n,
-    })
+    return pd.DataFrame(
+        {
+            "GPS Time": timestamps,
+            "Speed (OBD)(km/h)": [speed_kmh] * n,
+            "CO\u2082 in g/km (Average)(g/km)": [120.0] * n,
+            "Engine Load(%)": [50.0] * n,
+            "Fuel flow rate/hour(l/hr)": [2.0] * n,
+        }
+    )
 
 
 def _write_archive_parquet(tmp_path: Path, name: str, speed_kmh: float = 30.0) -> Path:
     """Write a v2 archive Parquet using OBDFile and return its path."""
     from drive_cycle_calculator.obd_file import OBDFile
+
     raw_df = _make_archive_df(speed_kmh=speed_kmh)
     obd = OBDFile(raw_df, name)
     dest = tmp_path / f"{name}.parquet"
@@ -592,6 +587,7 @@ class TestTripCollectionDuckDB:
     def test_upsert_idempotency(self, tmp_path):
         """Calling to_duckdb_catalog() twice produces no duplicate rows."""
         import duckdb
+
         t = Trip(_make_processed_df(), "trip")
         tc = TripCollection([t])
         trips_dir = tmp_path / "trips"
@@ -608,6 +604,7 @@ class TestTripCollectionDuckDB:
     def test_empty_collection_no_op(self, tmp_path):
         """Empty TripCollection does not truncate an existing catalog."""
         import duckdb
+
         t = Trip(_make_processed_df(), "existing")
         tc = TripCollection([t])
         trips_dir = tmp_path / "trips"
@@ -630,6 +627,7 @@ class TestTripCollectionDuckDB:
     def test_from_catalog_empty_db_returns_empty(self, tmp_path):
         """Catalog with zero rows returns empty TripCollection."""
         import duckdb
+
         db = tmp_path / "empty.duckdb"
         with duckdb.connect(str(db)) as conn:
             conn.execute("""
@@ -671,6 +669,7 @@ class TestTripCollectionDuckDB:
     def test_max_velocity_populated(self, tmp_path):
         """max_velocity_kmh is stored (not NULL) for trips with speed_ms column."""
         import duckdb
+
         t = Trip(_make_processed_df(speed_ms=10.0), "trip")
         tc = TripCollection([t])
         trips_dir = tmp_path / "trips"

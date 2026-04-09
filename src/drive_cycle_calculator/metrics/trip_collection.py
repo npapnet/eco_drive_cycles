@@ -47,31 +47,6 @@ class TripCollection:
     # ── Constructors ─────────────────────────────────────────────────────────
 
     @classmethod
-    def from_excel(cls, path: str | Path) -> "TripCollection":
-        """Load from a combined calculations-log xlsx (one sheet per trip).
-
-        The log xlsx is produced by calculations.run_calculations() and already
-        contains processed columns (smoothed speed, acceleration, duration).
-        Empty sheets are silently skipped.
-
-        Raises
-        ------
-        FileNotFoundError
-            If path does not exist.
-        ValueError
-            If the file contains zero valid (non-empty) sheets.
-        """
-        sheets = pd.read_excel(Path(path), sheet_name=None)
-        trips = [
-            Trip(normalise_columns(df), name)
-            for name, df in sheets.items()
-            if not df.empty
-        ]
-        if not trips:
-            raise ValueError(f"No valid sheets found in {path}")
-        return cls(trips)
-
-    @classmethod
     def from_folder(
         cls,
         folder: str | Path,
@@ -185,7 +160,7 @@ class TripCollection:
             try:
                 obd = OBDFile.from_parquet(parquet_path)
                 trip = obd.to_trip(config)
-                trip._path = parquet_path   # so to_duckdb_catalog() knows the archive path
+                trip._path = parquet_path  # so to_duckdb_catalog() knows the archive path
                 trips.append(trip)
             except Exception as exc:
                 warnings.warn(f"Skipping {parquet_path.name}: {exc}", stacklevel=2)
@@ -226,10 +201,10 @@ class TripCollection:
         sanitised = [self._sanitise_name(t.name) for t in self.trips]
         if len(sanitised) != len(set(sanitised)):
             from collections import Counter
+
             dupes = [n for n, c in Counter(sanitised).items() if c > 1]
             raise ValueError(
-                f"Name collision after sanitisation: {dupes}. "
-                "Rename source trips before ingesting."
+                f"Name collision after sanitisation: {dupes}. Rename source trips before ingesting."
             )
 
         for trip, stem in zip(self.trips, sanitised):
@@ -315,9 +290,7 @@ class TripCollection:
         with duckdb.connect(str(db_path)) as conn:
             conn.execute(_CREATE)
             # Migrate existing catalogs that lack config_hash column.
-            conn.execute(
-                "ALTER TABLE trip_metadata ADD COLUMN IF NOT EXISTS config_hash VARCHAR"
-            )
+            conn.execute("ALTER TABLE trip_metadata ADD COLUMN IF NOT EXISTS config_hash VARCHAR")
             for trip in self.trips:
                 m = trip.metrics
                 sanitised = self._sanitise_name(trip.name)
@@ -377,9 +350,7 @@ class TripCollection:
             raise FileNotFoundError(f"Catalog not found: {db_path}")
 
         with duckdb.connect(str(db_path), read_only=True) as conn:
-            rows = conn.execute(
-                "SELECT trip_id, parquet_path FROM trip_metadata"
-            ).fetchall()
+            rows = conn.execute("SELECT trip_id, parquet_path FROM trip_metadata").fetchall()
 
         trips = []
         for trip_id, parquet_path in rows:
@@ -414,10 +385,7 @@ class TripCollection:
         if not self.trips:
             raise ValueError("Cannot compute similarity scores: collection is empty.")
         per = {t.name: t.metrics for t in self.trips}
-        overall = {
-            k: float(np.nanmean([m[k] for m in per.values()]))
-            for k in _SEVEN_METRIC_KEYS
-        }
+        overall = {k: float(np.nanmean([m[k] for m in per.values()])) for k in _SEVEN_METRIC_KEYS}
         return {
             t.name: float(
                 np.nanmean([similarity(overall[k], t.metrics[k]) for k in _SEVEN_METRIC_KEYS])
@@ -434,9 +402,7 @@ class TripCollection:
             If the collection is empty.
         """
         if not self.trips:
-            raise ValueError(
-                "Cannot find representative trip: collection is empty."
-            )
+            raise ValueError("Cannot find representative trip: collection is empty.")
         scores = self.similarity_scores()
         best_name = max(scores, key=scores.__getitem__)
         return next(t for t in self.trips if t.name == best_name)
