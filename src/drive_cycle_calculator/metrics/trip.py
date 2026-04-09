@@ -22,8 +22,7 @@ class Trip:
     Parameters
     ----------
     df : pd.DataFrame
-        Processed DataFrame with columns produced by calculations.run_calculations()
-        or _computations._process_raw_df().
+        Processed DataFrame with columns produced by _computations.process_raw_df().
     name : str
         Sheet / session name, e.g. '2025-05-14_Morning'.
     """

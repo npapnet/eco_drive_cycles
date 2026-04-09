@@ -173,8 +173,7 @@ def process_raw_df(df_raw: pd.DataFrame) -> pd.DataFrame:
     """Process a raw OBD xlsx DataFrame into the calculations-log format.
 
     Applies GPS-time → elapsed seconds, rolling smoothing, and acceleration
-    derivation. Returns a DataFrame whose columns match the combined log format
-    produced by calculations.run_calculations().
+    derivation. Returns a DataFrame whose columns match the combined log format.
 
     Raises ValueError if any required source column is missing.
     """
