@@ -1,4 +1,10 @@
 """
+> [!WARNING]
+> OBSOLETE
+> This script is obsolete. The logic has been integrated natively into `dcc gui`.
+> Use `uv run dcc gui` instead. 
+> This file remains for reference.
+
 GUI example: folder picker → ingest to DuckDB catalog → display speed profile.
 
 Three modes:

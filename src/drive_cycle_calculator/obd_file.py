@@ -150,6 +150,32 @@ class OBDFile:
             )
         return cls(df, path.stem)
 
+    @classmethod
+    def from_file(
+        cls,
+        path: str | Path,
+        **kwargs,
+    ) -> "OBDFile":
+        """Load a raw OBD file (.xlsx or .csv) by inspecting its extension.
+
+        For .csv files, the `sep` and `decimal` kwargs are passed through to
+        allow explicit parsing configuration. Otherwise, automatic sniffing
+        is used.
+
+        Raises
+        ------
+        ValueError
+            If the file extension is unsupported.
+        """
+        path = Path(path)
+        ext = path.suffix.lower()
+        if ext in (".xlsx", ".xls"):
+            return cls.from_xlsx(path)
+        elif ext == ".csv":
+            return cls.from_csv(path, **kwargs)
+        else:
+            raise ValueError(f"Unsupported file extension: {ext}")
+
     # ── Persistence ───────────────────────────────────────────────────────────
 
     def to_parquet(self, path: str | Path) -> None:
