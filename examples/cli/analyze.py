@@ -9,7 +9,7 @@ Usage:
 import sys
 from pathlib import Path
 
-from drive_cycle_calculator.trip import TripCollection
+from drive_cycle_calculator.trip_collection import TripCollection
 
 out_dir = Path(sys.argv[1])
 db_path = out_dir / "metadata.duckdb"

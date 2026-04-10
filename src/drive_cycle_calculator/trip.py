@@ -210,5 +210,3 @@ class Trip:
         return f"Trip(name={self.name!r}, mean_speed={self.mean_speed:.1f} km/h)"
 
 
-# Backward-compat re-export — TripCollection now lives in trip_collection.py.
-from drive_cycle_calculator.trip_collection import TripCollection  # noqa: E402, F401
