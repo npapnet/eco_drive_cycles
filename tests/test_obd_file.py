@@ -223,8 +223,8 @@ class TestToParquet:
         meta = pq.read_metadata(p).metadata
         assert meta[b"format_version"] == b"2"
 
-    def test_gps_time_preserved(self, tmp_path):
-        """GPS Time column survives the Parquet roundtrip as string-like data."""
+    def test_gps_time_stored_as_datetime(self, tmp_path):
+        """GPS Time is converted to datetime64 on write; the column survives roundtrip."""
         src = _make_raw_df()
         obd = OBDFile(src, "gps_test")
         p = tmp_path / "gps_test.parquet"
@@ -232,6 +232,98 @@ class TestToParquet:
         loaded = OBDFile.from_parquet(p)
         assert "GPS Time" in loaded._df.columns
         assert loaded._df["GPS Time"].notna().all()
+        # Must come back as a datetime type, not raw object/string
+        assert pd.api.types.is_datetime64_any_dtype(loaded._df["GPS Time"])
+
+    def test_use_dictionary_false_default(self, tmp_path):
+        """Default (False) writes without dict encoding — file is still valid."""
+        p = tmp_path / "nodict.parquet"
+        OBDFile(_make_raw_df(), "t").to_parquet(p)
+        import pyarrow.parquet as pq_
+        assert pq_.read_table(p) is not None
+
+    def test_use_dictionary_true(self, tmp_path):
+        """use_dictionary=True writes a valid file; timestamp cols are not dict-encoded."""
+        p = tmp_path / "dict.parquet"
+        OBDFile(_make_raw_df(), "t").to_parquet(p, use_dictionary=True)
+        import pyarrow.parquet as pq_
+        table = pq_.read_table(p)
+        assert table is not None
+        assert len(table) == 10
+
+    def test_use_dictionary_explicit_list(self, tmp_path):
+        """use_dictionary=[col] dict-encodes only the named column."""
+        p = tmp_path / "dict_list.parquet"
+        OBDFile(_make_raw_df(), "t").to_parquet(p, use_dictionary=["Engine Load(%)"])
+        import pyarrow.parquet as pq_
+        assert pq_.read_table(p) is not None
+
+
+# ── _strip_column_names ───────────────────────────────────────────────────────
+
+
+class TestStripColumnNames:
+    def test_leading_spaces_removed(self):
+        df = pd.DataFrame({" A": [1], "B ": [2], "\tC\t": [3]})
+        obd = OBDFile(df, "t")
+        assert list(obd._df.columns) == ["A", "B", "C"]
+
+    def test_clean_names_unchanged(self):
+        df = pd.DataFrame({"GPS Time": ["x"], "Speed (OBD)(km/h)": [30.0]})
+        obd = OBDFile(df, "t")
+        assert list(obd._df.columns) == ["GPS Time", "Speed (OBD)(km/h)"]
+
+    def test_device_time_with_leading_space_normalised(self):
+        """The classic Torque " Device Time" column is cleaned to "Device Time"."""
+        df = pd.DataFrame({" Device Time": ["Mon Sep 22 10:30:00 +0300 2019"]})
+        obd = OBDFile(df, "t")
+        assert "Device Time" in obd._df.columns
+        assert " Device Time" not in obd._df.columns
+
+
+# ── _parse_timestamps ─────────────────────────────────────────────────────────
+
+
+class TestParseTimestamps:
+    def test_converts_gps_time_to_datetime(self):
+        from drive_cycle_calculator.obd_file import _parse_timestamps
+
+        df = pd.DataFrame({"GPS Time": ["Mon Sep 22 10:30:00 +0300 2019"] * 3})
+        out = _parse_timestamps(df)
+        assert pd.api.types.is_datetime64_any_dtype(out["GPS Time"])
+
+    def test_converts_device_time_to_datetime(self):
+        from drive_cycle_calculator.obd_file import _parse_timestamps
+
+        df = pd.DataFrame({"Device Time": ["Mon Sep 22 10:30:00 +0300 2019"] * 3})
+        out = _parse_timestamps(df)
+        assert pd.api.types.is_datetime64_any_dtype(out["Device Time"])
+
+    def test_already_datetime_unchanged(self):
+        from drive_cycle_calculator.obd_file import _parse_timestamps
+
+        ts = pd.to_datetime(["2019-09-22 07:30:00"], utc=True)
+        df = pd.DataFrame({"GPS Time": ts})
+        out = _parse_timestamps(df)
+        # dtype should still be datetime — not converted a second time
+        assert pd.api.types.is_datetime64_any_dtype(out["GPS Time"])
+
+    def test_missing_timestamp_col_skipped(self):
+        from drive_cycle_calculator.obd_file import _parse_timestamps
+
+        df = pd.DataFrame({"Speed (OBD)(km/h)": [30.0]})
+        out = _parse_timestamps(df)  # must not raise
+        assert "Speed (OBD)(km/h)" in out.columns
+
+    def test_returns_copy_not_inplace(self):
+        from drive_cycle_calculator.obd_file import _parse_timestamps
+
+        df = pd.DataFrame({"GPS Time": ["Mon Sep 22 10:30:00 +0300 2019"]})
+        _parse_timestamps(df)
+        # Original df must not be mutated — dtype should still be non-datetime
+        assert not pd.api.types.is_datetime64_any_dtype(
+            df["GPS Time"]
+        ), "Original df must not be mutated"
 
 
 # ── curated_df ────────────────────────────────────────────────────────────────
@@ -355,13 +447,14 @@ class TestQualityReport:
         assert report["row_count"] == 0
         assert report["gps_gap_count"] == 0
 
+
 # ── to_trip ───────────────────────────────────────────────────────────────────
 
 
 class TestToTrip:
     def test_happy_path_columns(self):
         """to_trip() returns Trip with expected processed columns."""
-        from drive_cycle_calculator.metrics.trip import Trip
+        from drive_cycle_calculator.trip import Trip
 
         obd = OBDFile(_make_raw_df(), "test_trip")
         trip = obd.to_trip()
@@ -401,3 +494,83 @@ class TestToTrip:
         # just verify both return valid Trips without error.
         assert "smooth_speed_kmh" in trip4._df.columns
         assert "smooth_speed_kmh" in trip8._df.columns
+
+
+# ── parquet_name ──────────────────────────────────────────────────────────────
+
+
+class TestParquetName:
+    # Torque timestamp format used across tests
+    _FMT = "Mon Sep 22 10:30:{:02d} +0300 2019"
+
+    def _make_obd(self, gps_times: list) -> OBDFile:
+        df = pd.DataFrame({"GPS Time": gps_times})
+        return OBDFile(df, "fallback_name")
+
+    def test_format_matches_pattern(self):
+        """parquet_name is 't<YYYYMMDD-hhmmss>-<duration_s>' for a valid trip."""
+        import re
+
+        obd = self._make_obd([self._FMT.format(i) for i in range(10)])
+        name = obd.parquet_name
+        assert re.fullmatch(r"t\d{8}-\d{6}-\d+", name), f"Unexpected name: {name!r}"
+
+    def test_start_timestamp_correct(self):
+        """UTC date and time in the name reflect the first valid GPS row."""
+        # First row: 10:30:00 +0300 → UTC 07:30:00
+        obd = self._make_obd([self._FMT.format(i) for i in range(5)])
+        name = obd.parquet_name
+        assert name.startswith("t20190922-073000"), f"Unexpected name: {name!r}"
+
+    def test_duration_correct(self):
+        """Duration in seconds equals last-minus-first GPS timestamp."""
+        # 10 rows at 1-second intervals → duration = 9 s
+        obd = self._make_obd([self._FMT.format(i) for i in range(10)])
+        duration_s = int(obd.parquet_name.rsplit("-", 1)[-1])
+        assert duration_s == 9
+
+    def test_only_first_and_last_rows_parsed(self, monkeypatch):
+        """to_datetime is called exactly twice — once per endpoint — not for the whole column."""
+        from drive_cycle_calculator import gps_time_parser as _mod
+
+        call_sizes: list[int] = []
+        original = _mod.GpsTimeParser.to_datetime
+
+        def spy(self, series):
+            call_sizes.append(len(series))
+            return original(self, series)
+
+        monkeypatch.setattr(_mod.GpsTimeParser, "to_datetime", spy)
+
+        obd = self._make_obd([self._FMT.format(i) for i in range(50)])
+        obd.parquet_name
+
+        assert call_sizes == [1, 1], (
+            f"Expected exactly two single-row parses, got call sizes: {call_sizes}"
+        )
+
+    def test_leading_trailing_nans_skipped(self):
+        """NaN rows at start and end don't corrupt the result — valid rows are found."""
+        times = [None, None, self._FMT.format(0), self._FMT.format(5), None]
+        obd = self._make_obd(times)
+        name = obd.parquet_name
+        assert name.startswith("t20190922-"), f"Unexpected name: {name!r}"
+        duration_s = int(name.rsplit("-", 1)[-1])
+        assert duration_s == 5
+
+    def test_single_row_duration_zero(self):
+        """A trip with a single GPS row produces duration_s = 0."""
+        obd = self._make_obd([self._FMT.format(0)])
+        name = obd.parquet_name
+        assert name.endswith("-0"), f"Expected '-0' suffix, got: {name!r}"
+
+    def test_no_gps_time_column_falls_back(self):
+        """Falls back to self.name when GPS Time column is absent."""
+        df = pd.DataFrame({"Speed (OBD)(km/h)": [30.0]})
+        obd = OBDFile(df, "fallback_name")
+        assert obd.parquet_name == "fallback_name"
+
+    def test_all_unparseable_falls_back(self):
+        """Falls back to self.name when GPS Time column is fully unparseable."""
+        obd = self._make_obd(["not-a-date", "also-not-a-date"])
+        assert obd.parquet_name == "fallback_name"

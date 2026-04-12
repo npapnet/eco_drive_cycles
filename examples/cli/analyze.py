@@ -1,14 +1,21 @@
 """
+> [!WARNING]
+> OBSOLETE
+> This script is obsolete. The logic has been integrated natively into `dcc analyze`.
+> Use `uv run dcc analyze <data_dir>` instead. 
+> This file remains for reference.
+
 Step 2: Load stored trips from DuckDB catalog and analyze.
 Runs instantly — no raw file reprocessing.
 
 Usage:
     python examples/cli/analyze.py ./data/
 """
+
 import sys
 from pathlib import Path
 
-from drive_cycle_calculator.metrics.trip import TripCollection
+from drive_cycle_calculator.trip_collection import TripCollection
 
 out_dir = Path(sys.argv[1])
 db_path = out_dir / "metadata.duckdb"

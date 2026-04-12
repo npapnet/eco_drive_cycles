@@ -1,7 +1,8 @@
 import pytest
 import numpy as np
 import pandas as pd
-from drive_cycle_calculator.metrics import similarity, Trip
+from drive_cycle_calculator.trip import Trip
+from drive_cycle_calculator.trip_collection import similarity
 
 
 # ────────────────────────────────────────────────────────────────

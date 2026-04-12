@@ -9,7 +9,7 @@ from __future__ import annotations
 import csv
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Union
 
 import numpy as np
 import pandas as pd
@@ -22,7 +22,7 @@ from drive_cycle_calculator.gps_time_parser import GpsTimeParser
 
 if TYPE_CHECKING:
     from drive_cycle_calculator.processing_config import ProcessingConfig
-    from drive_cycle_calculator.metrics.trip import Trip
+    from drive_cycle_calculator.trip import Trip
 
 # Parquet format version written to PyArrow schema metadata.
 # v1 = old processed format (smooth_speed_kmh column present).
@@ -51,7 +51,7 @@ class OBDFile:
     """
 
     def __init__(self, df: pd.DataFrame, name: str) -> None:
-        self._df = df
+        self._df = _strip_column_names(df)
         self.name = name
 
     # ── Constructors ──────────────────────────────────────────────────────────
@@ -150,59 +150,120 @@ class OBDFile:
             )
         return cls(df, path.stem)
 
+    @classmethod
+    def from_file(
+        cls,
+        path: str | Path,
+        **kwargs,
+    ) -> "OBDFile":
+        """Load a raw OBD file (.xlsx or .csv) by inspecting its extension.
+
+        For .csv files, the `sep` and `decimal` kwargs are passed through to
+        allow explicit parsing configuration. Otherwise, automatic sniffing
+        is used.
+
+        Raises
+        ------
+        ValueError
+            If the file extension is unsupported.
+        """
+        path = Path(path)
+        ext = path.suffix.lower()
+        if ext in (".xlsx", ".xls"):
+            return cls.from_xlsx(path)
+        elif ext == ".csv":
+            return cls.from_csv(path, **kwargs)
+        else:
+            raise ValueError(f"Unsupported file extension: {ext}")
+
     # ── Persistence ───────────────────────────────────────────────────────────
 
-    def to_parquet(self, path: str | Path) -> None:
+    def to_parquet(
+        self,
+        path: str | Path,
+        use_dictionary: Union[bool, list[str]] = False,
+    ) -> None:
         """Write the full archive to a Parquet file (v2 format).
 
-        All columns are preserved. PyArrow schema metadata includes
-        ``format_version="2"`` so ``from_parquet()`` can detect old processed files.
+        Timestamp columns (``GPS Time``, ``Device Time``) are converted to
+        ``datetime64[ns, UTC]`` before serialisation, which reduces on-disk size
+        by 25–30 % compared to storing them as raw strings.
 
         Parameters
         ----------
         path : str | Path
             Destination path. Parent directory must exist.
+        use_dictionary : bool or list[str], optional
+            Controls PyArrow dictionary (RLE) encoding:
+
+            - ``False`` (default) — no dictionary encoding for any column.
+              Use this when column cardinality is high (most numeric columns).
+            - ``True`` — dictionary-encode every column *except* the timestamp
+              columns (``GPS Time``, ``Device Time``), which are already stored
+              efficiently as ``datetime64``.
+            - ``list[str]`` — explicit list of column names to dictionary-encode.
         """
         path = Path(path)
-        table = pa.Table.from_pandas(self._df)
-        existing_meta = table.schema.metadata or {}
-        new_meta = {**existing_meta, _FORMAT_VERSION_KEY: _FORMAT_VERSION.encode()}
-        table = table.replace_schema_metadata(new_meta)
-        pq.write_table(table, path)
-
-    def to_parquet_optimised(self, path: str | Path) -> None:
-        """Write the full archive to a Parquet file (v2 format).
-
-        TODO: substitute with current implementation. This results in a reduction by 25 to 30% on disk.
-
-        """
-        path = Path(path)
-
-        df_withdt = self._df.copy()
-        parser = GpsTimeParser()
-        df_withdt["GPS Time"] = parser.to_datetime(df_withdt["GPS Time"])
-        df_withdt[" Device Time"] = parser.to_datetime(df_withdt[" Device Time"])
-
-        table = pa.Table.from_pandas(df_withdt)
+        df = _parse_timestamps(self._df)
+        table = pa.Table.from_pandas(df)
         existing_meta = table.schema.metadata or {}
         new_meta = {**existing_meta, _FORMAT_VERSION_KEY: _FORMAT_VERSION.encode()}
         table = table.replace_schema_metadata(new_meta)
 
-        columns_for_dict = [
-            col for col in table.column_names if col not in ["GPS Time", " Device Time"]
-        ]
-        # use columns_for_dict = False for best compression results
+        if use_dictionary is True:
+            # Dict-encode everything except the already-typed timestamp columns
+            resolved_dict: bool | list[str] = [
+                col for col in table.column_names if col not in _TIMESTAMP_COLS
+            ]
+        else:
+            resolved_dict = use_dictionary  # False or explicit list pass-through
 
         pq.write_table(
             table,
-            "gps_time_parsed_opt.parquet",
+            path,
             compression="zstd",
-            use_dictionary=columns_for_dict,
+            use_dictionary=resolved_dict,
             write_statistics=True,
             version="2.6",
         )
 
     # ── Properties ────────────────────────────────────────────────────────────
+
+    @property
+    def parquet_name(self) -> str:
+        """Return a canonical Parquet stem derived from the trip's GPS start time and duration.
+
+        Format: ``t<YYYYMMDD-hhmmss>-<duration_s>``
+
+        - ``YYYYMMDD-hhmmss`` is the UTC timestamp of the first valid GPS row.
+        - ``duration_s`` is the total elapsed seconds (integer) from first to last
+          valid GPS timestamp.
+
+        Falls back to ``self.name`` (the raw filename stem) if the GPS Time column
+        is absent or fully unparseable.
+        """
+        if "GPS Time" not in self._df.columns:
+            return self.name
+
+        # Avoid parsing the full column — only the first and last non-null raw
+        # values are needed.  dropna() on a string Series is a cheap null-mask
+        # scan; the expensive dateutil parse only runs twice.
+        raw_valid = self._df["GPS Time"].dropna()
+        if raw_valid.empty:
+            return self.name
+
+        parser = GpsTimeParser()
+        start_dt = parser.to_datetime(raw_valid.iloc[[0]]).dropna()
+        if start_dt.empty:
+            return self.name
+
+        start_ts: pd.Timestamp = start_dt.iloc[0]
+        end_dt = parser.to_datetime(raw_valid.iloc[[-1]]).dropna()
+        duration_s = (
+            int((end_dt.iloc[0] - start_ts).total_seconds()) if not end_dt.empty else 0
+        )
+        stamp = start_ts.strftime("%Y%m%d-%H%M%S")
+        return f"t{stamp}-{duration_s}"
 
     @property
     def curated_df(self) -> pd.DataFrame:
@@ -302,7 +363,7 @@ class OBDFile:
             If any CURATED_COL is missing from the raw DataFrame.
         """
         from drive_cycle_calculator.processing_config import DEFAULT_CONFIG
-        from drive_cycle_calculator.metrics.trip import Trip
+        from drive_cycle_calculator.trip import Trip
 
         if config is None:
             config = DEFAULT_CONFIG
@@ -320,7 +381,40 @@ class OBDFile:
 
 # ── Module-level helpers ──────────────────────────────────────────────────────
 
-_TIMESTAMP_COLS = frozenset({"GPS Time"})
+# Columns containing timestamp strings — excluded from numeric coercion and
+# dict encoding, converted to datetime64 only at serialisation time.
+_TIMESTAMP_COLS = frozenset({"GPS Time", "Device Time"})
+
+
+def _strip_column_names(df: pd.DataFrame) -> pd.DataFrame:
+    """Return *df* with all column names stripped of leading/trailing whitespace.
+
+    Torque exports sometimes emit column headers with surrounding spaces or tabs
+    (e.g. ``" Device Time\t"``). Normalising them on construction means the rest
+    of the code can use clean names (``"Device Time"``) unconditionally.
+
+    The operation is performed on the DataFrame index in-place (no data copy).
+    """
+    df.columns = df.columns.str.strip()
+    return df
+
+
+def _parse_timestamps(df: pd.DataFrame) -> pd.DataFrame:
+    """Return a copy of *df* with timestamp columns converted to ``datetime64[ns, UTC]``.
+
+    Only columns listed in ``_TIMESTAMP_COLS`` that are actually present *and*
+    still stored as object dtype (raw strings) are converted — already-typed
+    columns are left untouched.  Missing columns are silently skipped.
+
+    This is called once, immediately before Parquet serialisation, so that the
+    archive stores efficient binary timestamps rather than variable-length strings.
+    """
+    parser = GpsTimeParser()
+    df = df.copy()
+    for col in _TIMESTAMP_COLS:
+        if col in df.columns and not pd.api.types.is_datetime64_any_dtype(df[col]):
+            df[col] = parser.to_datetime(df[col])
+    return df
 
 
 def _coerce_numeric_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -330,8 +424,8 @@ def _coerce_numeric_columns(df: pd.DataFrame) -> pd.DataFrame:
     mixed str/float columns produce dtype=object and PyArrow raises ArrowTypeError
     on to_parquet().
 
-    Timestamp columns (GPS Time) are skipped — they contain date strings and must
-    remain as-is for _gps_to_duration_seconds() to parse them correctly.
+    Timestamp columns are skipped — they contain date strings and must remain
+    as-is for GpsTimeParser to parse them correctly.
     """
     for col in df.columns:
         if col in _TIMESTAMP_COLS:

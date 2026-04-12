@@ -112,6 +112,13 @@ class TestProcessingConfigApply:
         assert result["engine_load_pct"].dropna().iloc[0] == pytest.approx(50.0)
         assert result["fuel_flow_lph"].dropna().iloc[0] == pytest.approx(2.0)
 
+    def test_missing_required_column_raises(self):
+        """apply() raises ValueError with the offending column names when input is incomplete."""
+        df = _make_curated_df().drop(columns=["Engine Load(%)", "Fuel flow rate/hour(l/hr)"])
+        with pytest.raises(ValueError, match="Engine Load"):
+            ProcessingConfig().apply(df)
+
+
 
 class TestProcessingConfigHash:
     def test_same_config_same_hash(self):

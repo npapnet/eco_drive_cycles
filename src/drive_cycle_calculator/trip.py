@@ -14,7 +14,6 @@ from pathlib import Path
 import pandas as pd
 
 
-
 class Trip:
     """One recorded driving session.
 
@@ -42,9 +41,7 @@ class Trip:
         """Return the DataFrame, loading from _path on first access if needed."""
         if self.__df is None:
             if self._path is None:
-                raise RuntimeError(
-                    f"Trip {self.name!r} has no DataFrame and no _path set."
-                )
+                raise RuntimeError(f"Trip {self.name!r} has no DataFrame and no _path set.")
             if not self._path.exists():
                 raise FileNotFoundError(
                     f"Parquet file for trip {self.name!r} not found: {self._path}"
@@ -78,8 +75,10 @@ class Trip:
         """
         df = self._df
         stop_threshold_kmh = self.stop_threshold_kmh
-        
-        duration = float(df["elapsed_s"].dropna().max()) if "elapsed_s" in df.columns else float("nan")
+
+        duration = (
+            float(df["elapsed_s"].dropna().max()) if "elapsed_s" in df.columns else float("nan")
+        )
 
         # Speed: prefer smooth_speed_kmh (new pipeline); fall back to speed_ms (old pipeline).
         if "smooth_speed_kmh" in df.columns:
@@ -202,8 +201,7 @@ class Trip:
         See TODOS.md: 'Microtrip segmentation (P1)'.
         """
         raise NotImplementedError(
-            "Microtrip segmentation is planned for a future release. "
-            "See TODOS.md for tracking."
+            "Microtrip segmentation is planned for a future release. See TODOS.md for tracking."
         )
 
     # ── Dunder ────────────────────────────────────────────────────────────────
@@ -212,5 +210,3 @@ class Trip:
         return f"Trip(name={self.name!r}, mean_speed={self.mean_speed:.1f} km/h)"
 
 
-# Backward-compat re-export — TripCollection now lives in trip_collection.py.
-from drive_cycle_calculator.metrics.trip_collection import TripCollection  # noqa: E402, F401

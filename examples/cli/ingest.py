@@ -8,20 +8,27 @@ Usage:
 
 # %% [markdown]
 """
-## Ingest pipeline
+> [!WARNING]
+> OBSOLETE
+> This script is obsolete. The logic has been integrated natively into `dcc ingest`.
+> Use `uv run dcc ingest <raw_dir> <out_dir>` instead. 
+> This file remains for reference.
 
-1. `TripCollection.from_folder_raw()` — loads all .xlsx as raw OBDFile objects (no processing yet)
+## Legacy Ingest pipeline (Decoupled from TripCollection)
+
+1. `OBDFile.from_file(path)` — loads file (Excel or CSV) as raw OBDFile.
 2. Inspect quality via `quality_report()` and skip files with missing CURATED_COLS
-3. `OBDFile.to_parquet()` — write v2 archive Parquets (all raw columns, no derived cols)
-4. `TripCollection.from_archive_parquets()` — process archives -> Trips via ProcessingConfig
-5. `TripCollection.to_duckdb_catalog()` — upsert trip metadata + config_hash into DuckDB
+3. `OBDFile.to_parquet()` — write v2 archive Parquets
+4. `TripCollection.from_archive_parquets()` — process archives
+5. `TripCollection.to_duckdb_catalog()` — upsert trip metadata into DuckDB
 """
 
 # %%
 import sys
 from pathlib import Path
 
-from drive_cycle_calculator.metrics.trip_collection import TripCollection
+from drive_cycle_calculator.obd_file import OBDFile
+from drive_cycle_calculator.trip_collection import TripCollection
 
 raw_dir = Path(sys.argv[1])
 out_dir = Path(sys.argv[2])
@@ -31,23 +38,30 @@ db_path = out_dir / "metadata.duckdb"
 archive_dir.mkdir(parents=True, exist_ok=True)
 
 # %%
-print(f"Loading raw xlsx files from {raw_dir}...")
-raw_files = TripCollection.from_folder_raw(raw_dir)
+print(f"Loading raw files from {raw_dir}...")
+raw_files = list(raw_dir.glob("*.xlsx")) + list(raw_dir.glob("*.xls")) + list(raw_dir.glob("*.csv"))
 print(f"  Found {len(raw_files)} raw files.")
 
 if not raw_files:
-    print("No xlsx files found — nothing to ingest.")
+    print("No files found — nothing to ingest.")
     sys.exit(0)
 
 # %%
 print("Writing v2 archive Parquets...")
 archived = []
-for obd in raw_files:
+for f in raw_files:
+    try:
+        obd = OBDFile.from_file(f)
+    except Exception as exc:
+        print(f"  ERROR {f.name}: {exc}")
+        continue
+
     report = obd.quality_report()
     missing = report["missing_curated_cols"]
     if missing:
         print(f"  SKIP {obd.name}: missing columns {missing}")
         continue
+
     dest = archive_dir / f"{obd.name}.parquet"
     obd.to_parquet(dest)
     archived.append(obd.name)

@@ -17,11 +17,10 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
-from drive_cycle_calculator.metrics.trip import Trip
-
 if TYPE_CHECKING:
     from drive_cycle_calculator.obd_file import OBDFile
     from drive_cycle_calculator.processing_config import ProcessingConfig
+    from drive_cycle_calculator.trip import Trip
 
 
 _SEVEN_METRIC_KEYS = (
@@ -178,28 +177,6 @@ class TripCollection:
     def _sanitise_name(name: str) -> str:
         """Replace filesystem-unsafe characters with '_'."""
         return re.sub(r"[^\w\-.]", "_", name)
-
-    @classmethod
-    def from_parquet(cls, directory: str | Path) -> "TripCollection":
-        """Load processed Parquet files as a TripCollection (legacy v1 format).
-
-        .. deprecated::
-            Use from_archive_parquets() for v2 archive Parquets.
-        """
-        warnings.warn(
-            "TripCollection.from_parquet() is deprecated. "
-            "Use TripCollection.from_archive_parquets() instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        directory = Path(directory)
-        if not directory.exists():
-            raise FileNotFoundError(f"Directory not found: {directory}")
-        trips = []
-        for parquet_path in sorted(directory.glob("*.parquet")):
-            df = pd.read_parquet(parquet_path)
-            trips.append(Trip(df, parquet_path.stem))
-        return cls(trips)
 
     # ── DuckDB catalog ────────────────────────────────────────────────────────
 
