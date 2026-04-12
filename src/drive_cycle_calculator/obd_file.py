@@ -231,6 +231,42 @@ class OBDFile:
     # ── Properties ────────────────────────────────────────────────────────────
 
     @property
+    def parquet_name(self) -> str:
+        """Return a canonical Parquet stem derived from the trip's GPS start time and duration.
+
+        Format: ``t<YYYYMMDD-hhmmss>-<duration_s>``
+
+        - ``YYYYMMDD-hhmmss`` is the UTC timestamp of the first valid GPS row.
+        - ``duration_s`` is the total elapsed seconds (integer) from first to last
+          valid GPS timestamp.
+
+        Falls back to ``self.name`` (the raw filename stem) if the GPS Time column
+        is absent or fully unparseable.
+        """
+        if "GPS Time" not in self._df.columns:
+            return self.name
+
+        # Avoid parsing the full column — only the first and last non-null raw
+        # values are needed.  dropna() on a string Series is a cheap null-mask
+        # scan; the expensive dateutil parse only runs twice.
+        raw_valid = self._df["GPS Time"].dropna()
+        if raw_valid.empty:
+            return self.name
+
+        parser = GpsTimeParser()
+        start_dt = parser.to_datetime(raw_valid.iloc[[0]]).dropna()
+        if start_dt.empty:
+            return self.name
+
+        start_ts: pd.Timestamp = start_dt.iloc[0]
+        end_dt = parser.to_datetime(raw_valid.iloc[[-1]]).dropna()
+        duration_s = (
+            int((end_dt.iloc[0] - start_ts).total_seconds()) if not end_dt.empty else 0
+        )
+        stamp = start_ts.strftime("%Y%m%d-%H%M%S")
+        return f"t{stamp}-{duration_s}"
+
+    @property
     def curated_df(self) -> pd.DataFrame:
         """Return the CURATED_COLS subset of the raw DataFrame.
 
@@ -346,7 +382,7 @@ class OBDFile:
 
 # ── Module-level helpers ──────────────────────────────────────────────────────
 
-_TIMESTAMP_COLS = frozenset({"GPS Time"})
+_TIMESTAMP_COLS = frozenset({"GPS Time", "Device Time"})
 
 
 def _coerce_numeric_columns(df: pd.DataFrame) -> pd.DataFrame:

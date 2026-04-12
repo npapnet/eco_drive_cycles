@@ -402,3 +402,83 @@ class TestToTrip:
         # just verify both return valid Trips without error.
         assert "smooth_speed_kmh" in trip4._df.columns
         assert "smooth_speed_kmh" in trip8._df.columns
+
+
+# ── parquet_name ──────────────────────────────────────────────────────────────
+
+
+class TestParquetName:
+    # Torque timestamp format used across tests
+    _FMT = "Mon Sep 22 10:30:{:02d} +0300 2019"
+
+    def _make_obd(self, gps_times: list) -> OBDFile:
+        df = pd.DataFrame({"GPS Time": gps_times})
+        return OBDFile(df, "fallback_name")
+
+    def test_format_matches_pattern(self):
+        """parquet_name is 't<YYYYMMDD-hhmmss>-<duration_s>' for a valid trip."""
+        import re
+
+        obd = self._make_obd([self._FMT.format(i) for i in range(10)])
+        name = obd.parquet_name
+        assert re.fullmatch(r"t\d{8}-\d{6}-\d+", name), f"Unexpected name: {name!r}"
+
+    def test_start_timestamp_correct(self):
+        """UTC date and time in the name reflect the first valid GPS row."""
+        # First row: 10:30:00 +0300 → UTC 07:30:00
+        obd = self._make_obd([self._FMT.format(i) for i in range(5)])
+        name = obd.parquet_name
+        assert name.startswith("t20190922-073000"), f"Unexpected name: {name!r}"
+
+    def test_duration_correct(self):
+        """Duration in seconds equals last-minus-first GPS timestamp."""
+        # 10 rows at 1-second intervals → duration = 9 s
+        obd = self._make_obd([self._FMT.format(i) for i in range(10)])
+        duration_s = int(obd.parquet_name.rsplit("-", 1)[-1])
+        assert duration_s == 9
+
+    def test_only_first_and_last_rows_parsed(self, monkeypatch):
+        """to_datetime is called exactly twice — once per endpoint — not for the whole column."""
+        from drive_cycle_calculator import gps_time_parser as _mod
+
+        call_sizes: list[int] = []
+        original = _mod.GpsTimeParser.to_datetime
+
+        def spy(self, series):
+            call_sizes.append(len(series))
+            return original(self, series)
+
+        monkeypatch.setattr(_mod.GpsTimeParser, "to_datetime", spy)
+
+        obd = self._make_obd([self._FMT.format(i) for i in range(50)])
+        obd.parquet_name
+
+        assert call_sizes == [1, 1], (
+            f"Expected exactly two single-row parses, got call sizes: {call_sizes}"
+        )
+
+    def test_leading_trailing_nans_skipped(self):
+        """NaN rows at start and end don't corrupt the result — valid rows are found."""
+        times = [None, None, self._FMT.format(0), self._FMT.format(5), None]
+        obd = self._make_obd(times)
+        name = obd.parquet_name
+        assert name.startswith("t20190922-"), f"Unexpected name: {name!r}"
+        duration_s = int(name.rsplit("-", 1)[-1])
+        assert duration_s == 5
+
+    def test_single_row_duration_zero(self):
+        """A trip with a single GPS row produces duration_s = 0."""
+        obd = self._make_obd([self._FMT.format(0)])
+        name = obd.parquet_name
+        assert name.endswith("-0"), f"Expected '-0' suffix, got: {name!r}"
+
+    def test_no_gps_time_column_falls_back(self):
+        """Falls back to self.name when GPS Time column is absent."""
+        df = pd.DataFrame({"Speed (OBD)(km/h)": [30.0]})
+        obd = OBDFile(df, "fallback_name")
+        assert obd.parquet_name == "fallback_name"
+
+    def test_all_unparseable_falls_back(self):
+        """Falls back to self.name when GPS Time column is fully unparseable."""
+        obd = self._make_obd(["not-a-date", "also-not-a-date"])
+        assert obd.parquet_name == "fallback_name"

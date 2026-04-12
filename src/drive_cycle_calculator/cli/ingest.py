@@ -79,9 +79,9 @@ def ingest(
             typer.secho(f"  SKIP  {obd.name}: missing columns {missing}", fg=typer.colors.YELLOW)
             continue
             
-        dest = archive_dir / f"{obd.name}.parquet"
+        dest = archive_dir / f"{obd.parquet_name}.parquet"
         obd.to_parquet(dest)
-        archived.append(obd.name)
+        archived.append(obd.parquet_name)
         typer.secho(f"  OK    {obd.name} -> {dest.name}", fg=typer.colors.GREEN)
 
     typer.echo(f"  Archived {len(archived)} trips, skipped {len(files) - len(archived)}.")
