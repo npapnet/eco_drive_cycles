@@ -223,8 +223,8 @@ class TestToParquet:
         meta = pq.read_metadata(p).metadata
         assert meta[b"format_version"] == b"2"
 
-    def test_gps_time_preserved(self, tmp_path):
-        """GPS Time column survives the Parquet roundtrip as string-like data."""
+    def test_gps_time_stored_as_datetime(self, tmp_path):
+        """GPS Time is converted to datetime64 on write; the column survives roundtrip."""
         src = _make_raw_df()
         obd = OBDFile(src, "gps_test")
         p = tmp_path / "gps_test.parquet"
@@ -232,6 +232,98 @@ class TestToParquet:
         loaded = OBDFile.from_parquet(p)
         assert "GPS Time" in loaded._df.columns
         assert loaded._df["GPS Time"].notna().all()
+        # Must come back as a datetime type, not raw object/string
+        assert pd.api.types.is_datetime64_any_dtype(loaded._df["GPS Time"])
+
+    def test_use_dictionary_false_default(self, tmp_path):
+        """Default (False) writes without dict encoding — file is still valid."""
+        p = tmp_path / "nodict.parquet"
+        OBDFile(_make_raw_df(), "t").to_parquet(p)
+        import pyarrow.parquet as pq_
+        assert pq_.read_table(p) is not None
+
+    def test_use_dictionary_true(self, tmp_path):
+        """use_dictionary=True writes a valid file; timestamp cols are not dict-encoded."""
+        p = tmp_path / "dict.parquet"
+        OBDFile(_make_raw_df(), "t").to_parquet(p, use_dictionary=True)
+        import pyarrow.parquet as pq_
+        table = pq_.read_table(p)
+        assert table is not None
+        assert len(table) == 10
+
+    def test_use_dictionary_explicit_list(self, tmp_path):
+        """use_dictionary=[col] dict-encodes only the named column."""
+        p = tmp_path / "dict_list.parquet"
+        OBDFile(_make_raw_df(), "t").to_parquet(p, use_dictionary=["Engine Load(%)"])
+        import pyarrow.parquet as pq_
+        assert pq_.read_table(p) is not None
+
+
+# ── _strip_column_names ───────────────────────────────────────────────────────
+
+
+class TestStripColumnNames:
+    def test_leading_spaces_removed(self):
+        df = pd.DataFrame({" A": [1], "B ": [2], "\tC\t": [3]})
+        obd = OBDFile(df, "t")
+        assert list(obd._df.columns) == ["A", "B", "C"]
+
+    def test_clean_names_unchanged(self):
+        df = pd.DataFrame({"GPS Time": ["x"], "Speed (OBD)(km/h)": [30.0]})
+        obd = OBDFile(df, "t")
+        assert list(obd._df.columns) == ["GPS Time", "Speed (OBD)(km/h)"]
+
+    def test_device_time_with_leading_space_normalised(self):
+        """The classic Torque " Device Time" column is cleaned to "Device Time"."""
+        df = pd.DataFrame({" Device Time": ["Mon Sep 22 10:30:00 +0300 2019"]})
+        obd = OBDFile(df, "t")
+        assert "Device Time" in obd._df.columns
+        assert " Device Time" not in obd._df.columns
+
+
+# ── _parse_timestamps ─────────────────────────────────────────────────────────
+
+
+class TestParseTimestamps:
+    def test_converts_gps_time_to_datetime(self):
+        from drive_cycle_calculator.obd_file import _parse_timestamps
+
+        df = pd.DataFrame({"GPS Time": ["Mon Sep 22 10:30:00 +0300 2019"] * 3})
+        out = _parse_timestamps(df)
+        assert pd.api.types.is_datetime64_any_dtype(out["GPS Time"])
+
+    def test_converts_device_time_to_datetime(self):
+        from drive_cycle_calculator.obd_file import _parse_timestamps
+
+        df = pd.DataFrame({"Device Time": ["Mon Sep 22 10:30:00 +0300 2019"] * 3})
+        out = _parse_timestamps(df)
+        assert pd.api.types.is_datetime64_any_dtype(out["Device Time"])
+
+    def test_already_datetime_unchanged(self):
+        from drive_cycle_calculator.obd_file import _parse_timestamps
+
+        ts = pd.to_datetime(["2019-09-22 07:30:00"], utc=True)
+        df = pd.DataFrame({"GPS Time": ts})
+        out = _parse_timestamps(df)
+        # dtype should still be datetime — not converted a second time
+        assert pd.api.types.is_datetime64_any_dtype(out["GPS Time"])
+
+    def test_missing_timestamp_col_skipped(self):
+        from drive_cycle_calculator.obd_file import _parse_timestamps
+
+        df = pd.DataFrame({"Speed (OBD)(km/h)": [30.0]})
+        out = _parse_timestamps(df)  # must not raise
+        assert "Speed (OBD)(km/h)" in out.columns
+
+    def test_returns_copy_not_inplace(self):
+        from drive_cycle_calculator.obd_file import _parse_timestamps
+
+        df = pd.DataFrame({"GPS Time": ["Mon Sep 22 10:30:00 +0300 2019"]})
+        _parse_timestamps(df)
+        # Original df must not be mutated — dtype should still be non-datetime
+        assert not pd.api.types.is_datetime64_any_dtype(
+            df["GPS Time"]
+        ), "Original df must not be mutated"
 
 
 # ── curated_df ────────────────────────────────────────────────────────────────

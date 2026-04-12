@@ -50,7 +50,21 @@ class ProcessingConfig:
 
             Note: speed_ms, acceleration_ms2, deceleration_ms2 are NOT produced —
             they are redundant and were removed in the v2 pipeline.
+
+        Raises
+        ------
+        ValueError
+            If any column required by this pipeline is absent from *curated_df*.
         """
+        from drive_cycle_calculator._schema import CURATED_COLS
+
+        missing = [c for c in CURATED_COLS if c not in curated_df.columns]
+        if missing:
+            raise ValueError(
+                f"ProcessingConfig.apply() received a DataFrame missing required "
+                f"column(s): {missing}. Pass a DataFrame produced by OBDFile.curated_df."
+            )
+
         parser = GpsTimeParser()
         elapsed_s = parser.to_duration_seconds(curated_df["GPS Time"])
 

@@ -9,7 +9,7 @@ from __future__ import annotations
 import csv
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Union
 
 import numpy as np
 import pandas as pd
@@ -51,7 +51,7 @@ class OBDFile:
     """
 
     def __init__(self, df: pd.DataFrame, name: str) -> None:
-        self._df = df
+        self._df = _strip_column_names(df)
         self.name = name
 
     # ── Constructors ──────────────────────────────────────────────────────────
@@ -178,52 +178,51 @@ class OBDFile:
 
     # ── Persistence ───────────────────────────────────────────────────────────
 
-    def to_parquet(self, path: str | Path) -> None:
+    def to_parquet(
+        self,
+        path: str | Path,
+        use_dictionary: Union[bool, list[str]] = False,
+    ) -> None:
         """Write the full archive to a Parquet file (v2 format).
 
-        All columns are preserved. PyArrow schema metadata includes
-        ``format_version="2"`` so ``from_parquet()`` can detect old processed files.
+        Timestamp columns (``GPS Time``, ``Device Time``) are converted to
+        ``datetime64[ns, UTC]`` before serialisation, which reduces on-disk size
+        by 25–30 % compared to storing them as raw strings.
 
         Parameters
         ----------
         path : str | Path
             Destination path. Parent directory must exist.
+        use_dictionary : bool or list[str], optional
+            Controls PyArrow dictionary (RLE) encoding:
+
+            - ``False`` (default) — no dictionary encoding for any column.
+              Use this when column cardinality is high (most numeric columns).
+            - ``True`` — dictionary-encode every column *except* the timestamp
+              columns (``GPS Time``, ``Device Time``), which are already stored
+              efficiently as ``datetime64``.
+            - ``list[str]`` — explicit list of column names to dictionary-encode.
         """
         path = Path(path)
-        table = pa.Table.from_pandas(self._df)
-        existing_meta = table.schema.metadata or {}
-        new_meta = {**existing_meta, _FORMAT_VERSION_KEY: _FORMAT_VERSION.encode()}
-        table = table.replace_schema_metadata(new_meta)
-        pq.write_table(table, path)
-
-    def to_parquet_optimised(self, path: str | Path) -> None:
-        """Write the full archive to a Parquet file (v2 format).
-
-        TODO: substitute with current implementation. This results in a reduction by 25 to 30% on disk.
-
-        """
-        path = Path(path)
-
-        df_withdt = self._df.copy()
-        parser = GpsTimeParser()
-        df_withdt["GPS Time"] = parser.to_datetime(df_withdt["GPS Time"])
-        df_withdt[" Device Time"] = parser.to_datetime(df_withdt[" Device Time"])
-
-        table = pa.Table.from_pandas(df_withdt)
+        df = _parse_timestamps(self._df)
+        table = pa.Table.from_pandas(df)
         existing_meta = table.schema.metadata or {}
         new_meta = {**existing_meta, _FORMAT_VERSION_KEY: _FORMAT_VERSION.encode()}
         table = table.replace_schema_metadata(new_meta)
 
-        columns_for_dict = [
-            col for col in table.column_names if col not in ["GPS Time", " Device Time"]
-        ]
-        # use columns_for_dict = False for best compression results
+        if use_dictionary is True:
+            # Dict-encode everything except the already-typed timestamp columns
+            resolved_dict: bool | list[str] = [
+                col for col in table.column_names if col not in _TIMESTAMP_COLS
+            ]
+        else:
+            resolved_dict = use_dictionary  # False or explicit list pass-through
 
         pq.write_table(
             table,
-            "gps_time_parsed_opt.parquet",
+            path,
             compression="zstd",
-            use_dictionary=columns_for_dict,
+            use_dictionary=resolved_dict,
             write_statistics=True,
             version="2.6",
         )
@@ -382,7 +381,40 @@ class OBDFile:
 
 # ── Module-level helpers ──────────────────────────────────────────────────────
 
+# Columns containing timestamp strings — excluded from numeric coercion and
+# dict encoding, converted to datetime64 only at serialisation time.
 _TIMESTAMP_COLS = frozenset({"GPS Time", "Device Time"})
+
+
+def _strip_column_names(df: pd.DataFrame) -> pd.DataFrame:
+    """Return *df* with all column names stripped of leading/trailing whitespace.
+
+    Torque exports sometimes emit column headers with surrounding spaces or tabs
+    (e.g. ``" Device Time\t"``). Normalising them on construction means the rest
+    of the code can use clean names (``"Device Time"``) unconditionally.
+
+    The operation is performed on the DataFrame index in-place (no data copy).
+    """
+    df.columns = df.columns.str.strip()
+    return df
+
+
+def _parse_timestamps(df: pd.DataFrame) -> pd.DataFrame:
+    """Return a copy of *df* with timestamp columns converted to ``datetime64[ns, UTC]``.
+
+    Only columns listed in ``_TIMESTAMP_COLS`` that are actually present *and*
+    still stored as object dtype (raw strings) are converted — already-typed
+    columns are left untouched.  Missing columns are silently skipped.
+
+    This is called once, immediately before Parquet serialisation, so that the
+    archive stores efficient binary timestamps rather than variable-length strings.
+    """
+    parser = GpsTimeParser()
+    df = df.copy()
+    for col in _TIMESTAMP_COLS:
+        if col in df.columns and not pd.api.types.is_datetime64_any_dtype(df[col]):
+            df[col] = parser.to_datetime(df[col])
+    return df
 
 
 def _coerce_numeric_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -392,8 +424,8 @@ def _coerce_numeric_columns(df: pd.DataFrame) -> pd.DataFrame:
     mixed str/float columns produce dtype=object and PyArrow raises ArrowTypeError
     on to_parquet().
 
-    Timestamp columns (GPS Time) are skipped — they contain date strings and must
-    remain as-is for _gps_to_duration_seconds() to parse them correctly.
+    Timestamp columns are skipped — they contain date strings and must remain
+    as-is for GpsTimeParser to parse them correctly.
     """
     for col in df.columns:
         if col in _TIMESTAMP_COLS:
