@@ -200,6 +200,7 @@ class TripCollection:
             in the catalog for reproducibility auditing.
         """
         import duckdb
+
         from drive_cycle_calculator.processing_config import DEFAULT_CONFIG
 
         if config is None:
@@ -281,6 +282,7 @@ class TripCollection:
             If db_path does not exist.
         """
         import duckdb
+
         from drive_cycle_calculator.obd_file import OBDFile
         from drive_cycle_calculator.processing_config import DEFAULT_CONFIG
 

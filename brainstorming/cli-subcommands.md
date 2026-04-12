@@ -26,7 +26,11 @@ A subcommand designated to scaffold the ingestion environment.
 * **Execution:** 1. The directory is scanned for the first valid `.csv` or `.xlsx` file.
     2. File headers are extracted without loading the full dataset into memory.
     3. The latest metadata schema is fetched from the SSOT registry.
-* **Output:** An `ingest_config.yaml` template is generated, containing auto-populated column mappings and placeholder fields for required metadata, accompanied by instructional comments derived from the schema definitions. 
+* **Output:** An `ingest_config.yaml` template is generated, containing: 
+  * placeholder fields for required metadata, accompanied by instructional comments derived from the schema definitions.
+  * placeholder for the column mappings for the required columns for the curated_df (CURATED_COLS)
+  * For convenience auto-populate the column on the first csv/xlsx file (if the file is csv, then the separator and decimal should be determined from the invocation of the command, default to sep = ",", dec = ".") 
+
 
 #### 3.2.2. Configuration Verification (`config-verify`)
 A subcommand utilized as a quality gatekeeper prior to heavy data processing.

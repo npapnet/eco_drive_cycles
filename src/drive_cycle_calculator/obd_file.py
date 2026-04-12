@@ -11,14 +11,12 @@ import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Union
 
-import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
 from drive_cycle_calculator._schema import CURATED_COLS
 from drive_cycle_calculator.gps_time_parser import GpsTimeParser
-
 
 if TYPE_CHECKING:
     from drive_cycle_calculator.processing_config import ProcessingConfig
@@ -51,7 +49,7 @@ class OBDFile:
     """
 
     def __init__(self, df: pd.DataFrame, name: str) -> None:
-        self._df = _strip_column_names(df)
+        self._df = _parse_timestamps(_strip_column_names(df))
         self.name = name
 
     # ── Constructors ──────────────────────────────────────────────────────────
@@ -185,9 +183,9 @@ class OBDFile:
     ) -> None:
         """Write the full archive to a Parquet file (v2 format).
 
-        Timestamp columns (``GPS Time``, ``Device Time``) are converted to
-        ``datetime64[ns, UTC]`` before serialisation, which reduces on-disk size
-        by 25–30 % compared to storing them as raw strings.
+        Timestamp columns (``GPS Time``, ``Device Time``) are stored as
+        ``datetime64[ns, UTC]`` — they are converted once at construction time,
+        so no additional transformation is needed here.
 
         Parameters
         ----------
@@ -204,8 +202,7 @@ class OBDFile:
             - ``list[str]`` — explicit list of column names to dictionary-encode.
         """
         path = Path(path)
-        df = _parse_timestamps(self._df)
-        table = pa.Table.from_pandas(df)
+        table = pa.Table.from_pandas(self._df)
         existing_meta = table.schema.metadata or {}
         new_meta = {**existing_meta, _FORMAT_VERSION_KEY: _FORMAT_VERSION.encode()}
         table = table.replace_schema_metadata(new_meta)
@@ -381,8 +378,8 @@ class OBDFile:
 
 # ── Module-level helpers ──────────────────────────────────────────────────────
 
-# Columns containing timestamp strings — excluded from numeric coercion and
-# dict encoding, converted to datetime64 only at serialisation time.
+# Columns excluded from numeric coercion (they hold timestamp strings on load,
+# then converted to datetime64 at construction time via _parse_timestamps).
 _TIMESTAMP_COLS = frozenset({"GPS Time", "Device Time"})
 
 
@@ -403,11 +400,13 @@ def _parse_timestamps(df: pd.DataFrame) -> pd.DataFrame:
     """Return a copy of *df* with timestamp columns converted to ``datetime64[ns, UTC]``.
 
     Only columns listed in ``_TIMESTAMP_COLS`` that are actually present *and*
-    still stored as object dtype (raw strings) are converted — already-typed
-    columns are left untouched.  Missing columns are silently skipped.
+    not already typed as datetime are converted — already-typed columns (e.g.
+    loaded from a v2 Parquet) are left untouched. Missing columns are silently
+    skipped.
 
-    This is called once, immediately before Parquet serialisation, so that the
-    archive stores efficient binary timestamps rather than variable-length strings.
+    Called once at construction time (``__init__``) so that ``_df`` is always in
+    a consistent state: clean column names, numeric coercion applied, and
+    timestamps as timezone-aware datetime objects.
     """
     parser = GpsTimeParser()
     df = df.copy()

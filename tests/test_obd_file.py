@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import csv
-import textwrap
-from io import StringIO
 from pathlib import Path
 
 import numpy as np
@@ -14,7 +11,6 @@ import pytest
 
 from drive_cycle_calculator._schema import CURATED_COLS
 from drive_cycle_calculator.obd_file import OBDFile
-
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -530,9 +526,17 @@ class TestParquetName:
         assert duration_s == 9
 
     def test_only_first_and_last_rows_parsed(self, monkeypatch):
-        """to_datetime is called exactly twice — once per endpoint — not for the whole column."""
+        """parquet_name calls to_datetime exactly twice with size-1 series.
+
+        Timestamps are parsed in full at __init__ time (unavoidable); the spy is
+        installed *after* construction so we only observe the parquet_name calls.
+        """
         from drive_cycle_calculator import gps_time_parser as _mod
 
+        # Build with real timestamps first (init will do its full-column parse)
+        obd = self._make_obd([self._FMT.format(i) for i in range(50)])
+
+        # Now install the spy — any subsequent to_datetime call is from parquet_name
         call_sizes: list[int] = []
         original = _mod.GpsTimeParser.to_datetime
 
@@ -541,12 +545,11 @@ class TestParquetName:
             return original(self, series)
 
         monkeypatch.setattr(_mod.GpsTimeParser, "to_datetime", spy)
-
-        obd = self._make_obd([self._FMT.format(i) for i in range(50)])
         obd.parquet_name
 
         assert call_sizes == [1, 1], (
-            f"Expected exactly two single-row parses, got call sizes: {call_sizes}"
+            f"Expected exactly two single-row parses from parquet_name, "
+            f"got call sizes: {call_sizes}"
         )
 
     def test_leading_trailing_nans_skipped(self):

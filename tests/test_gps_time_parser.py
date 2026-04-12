@@ -1,8 +1,8 @@
-import pytest
 import pandas as pd
-import numpy as np
+import pytest
 
 from drive_cycle_calculator.gps_time_parser import GpsTimeParser
+
 
 class TestGpsTimeParser:
     def test_numeric_gps_already_seconds(self):
@@ -67,7 +67,8 @@ class TestGpsTimeParser:
         # e.g., 1600000000, 1600000010
         # Wait, if they are numeric, they will evaluate as differences from first!
         # If it's epoch, difference from first is identical to elapsed seconds.
-        # So treating them as relative numeric duration actually produces the same perfect result of 0, 10!
+        # So treating them as relative numeric duration actually produces
+        # the same perfect result of 0, 10!
         s = pd.Series([1600000000.0, 1600000010.0])
         parser = GpsTimeParser()
         result = parser.to_duration_seconds(s)

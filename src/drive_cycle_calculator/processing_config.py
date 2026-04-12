@@ -13,7 +13,6 @@ from functools import cached_property
 import pandas as pd
 
 from drive_cycle_calculator._schema import OBD_COLUMN_MAP
-from drive_cycle_calculator.gps_time_parser import GpsTimeParser
 
 
 @dataclasses.dataclass
@@ -65,8 +64,10 @@ class ProcessingConfig:
                 f"column(s): {missing}. Pass a DataFrame produced by OBDFile.curated_df."
             )
 
-        parser = GpsTimeParser()
-        elapsed_s = parser.to_duration_seconds(curated_df["GPS Time"])
+        gps_dt = curated_df["GPS Time"]
+        if not pd.api.types.is_datetime64_any_dtype(gps_dt):
+            gps_dt = pd.to_datetime(gps_dt, errors="coerce", utc=True)
+        elapsed_s = (gps_dt - gps_dt.dropna().iloc[0]).dt.total_seconds()
 
         speed_raw = pd.to_numeric(curated_df["Speed (OBD)(km/h)"], errors="coerce")
         smooth_speed = speed_raw.rolling(

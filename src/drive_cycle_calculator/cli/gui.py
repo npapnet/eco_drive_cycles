@@ -59,7 +59,11 @@ def run_gui(
         status_var.set("Scanning for raw files…")
         try:
             raw_path = Path(raw_dir)
-            files = list(raw_path.glob("*.xlsx")) + list(raw_path.glob("*.xls")) + list(raw_path.glob("*.csv"))
+            files = (
+                list(raw_path.glob("*.xlsx"))
+                + list(raw_path.glob("*.xls"))
+                + list(raw_path.glob("*.csv"))
+            )
             
             if not files:
                 log.warning("No valid raw files found in: %s", raw_dir)
