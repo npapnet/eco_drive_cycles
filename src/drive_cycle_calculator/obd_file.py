@@ -17,6 +17,10 @@ import pyarrow.parquet as pq
 
 from drive_cycle_calculator._schema import CURATED_COLS
 from drive_cycle_calculator.gps_time_parser import GpsTimeParser
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 if TYPE_CHECKING:
     from drive_cycle_calculator.processing_config import ProcessingConfig
@@ -51,6 +55,65 @@ class OBDFile:
     def __init__(self, df: pd.DataFrame, name: str) -> None:
         self._df = _parse_timestamps(_strip_column_names(df))
         self.name = name
+
+        # preprocessing quality checks
+        if "Fuel flow rate/hour(l/hr)" not in self._df.columns:
+            logger.warning(
+                "'Fuel flow rate/hour(l/hr)' column is missing from %s",
+                name,
+            )
+            if "Fuel Rate (direct from ECU)(L/m)" in self._df.columns:
+                self._df["Fuel flow rate/hour(l/hr)"] = (
+                    self._df["Fuel Rate (direct from ECU)(L/m)"] * 60
+                )
+                logger.info(
+                    "'Fuel flow rate/hour(l/hr)' column created from 'Fuel Rate (direct from ECU)(L/m)' in %s.",
+                    name,
+                )
+            if "Fuel flow rate/hour(gal/hr)" in self._df.columns:
+                self._df["Fuel flow rate/hour(l/hr)"] = (
+                    self._df["Fuel flow rate/hour(gal/hr)"] * 3.78541
+                )
+                logger.info(
+                    "'Fuel flow rate/hour(l/hr)' column created from 'Fuel flow rate/hour(gal/hr)' in %s.",
+                    name,
+                )
+
+        self._validate_columns(strict=True)
+
+        # call function to create metadata
+        self._spatial_metadata = self._trip_metadata()
+
+    def _validate_columns(self, strict: bool = True):
+
+        # # Returns True if all columns exist, False otherwise
+        # assert set(CURATED_COLS).issubset(self._df.columns)
+
+        missing_cols = set(CURATED_COLS) - set(self._df.columns)
+
+        if missing_cols:
+            error_msg = f"DataFrame is missing required columns: {missing_cols}"
+
+            if strict:
+                # Halts execution immediately
+                raise ValueError(error_msg)
+            else:
+                # Alerts the user but allows the object to be created
+                logger.warning("%s. Some features may be degraded.", error_msg)
+
+    def _trip_metadata(self) -> dict:
+        """Extract metadata from the raw DataFrame for use in Trip construction."""
+        longmean, longstd = self._df["Longitude"].mean(), self._df["Longitude"].std()
+        latmean, latstd = self._df["Latitude"].mean(), self._df["Latitude"].std()
+        alt_mean, alt_std = self._df["Altitude"].mean(), self._df["Altitude"].std()
+        return {
+            "lon_mean": longmean,
+            "lon_std": longstd,
+            "lat_mean": latmean,
+            "lat_std": latstd,
+            "alt_mean": alt_mean,
+            "alt_std": alt_std,
+        }
 
     # ── Constructors ──────────────────────────────────────────────────────────
 
@@ -256,9 +319,7 @@ class OBDFile:
 
         start_ts: pd.Timestamp = start_dt.iloc[0]
         end_dt = parser.to_datetime(raw_valid.iloc[[-1]]).dropna()
-        duration_s = (
-            int((end_dt.iloc[0] - start_ts).total_seconds()) if not end_dt.empty else 0
-        )
+        duration_s = int((end_dt.iloc[0] - start_ts).total_seconds()) if not end_dt.empty else 0
         stamp = start_ts.strftime("%Y%m%d-%H%M%S")
         return f"t{stamp}-{duration_s}"
 
