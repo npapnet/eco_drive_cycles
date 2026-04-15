@@ -53,7 +53,16 @@ class OBDFile:
     """
 
     def __init__(self, df: pd.DataFrame, name: str) -> None:
-        self._df = _parse_timestamps(_strip_column_names(df))
+        """
+        Initialize an OBDFile with a raw DataFrame and name.
+        """
+
+        # Torque exports sometimes emit column headers with surrounding spaces or tabs
+        # (e.g. ``" Device Time\t"``). Normalising them on construction means the rest
+        # of the code can use clean names (``"Device Time"``) unconditionally.
+        df.columns = df.columns.str.strip()
+
+        self._df = _parse_timestamps(df)
         self.name = name
 
         # preprocessing quality checks
@@ -82,7 +91,8 @@ class OBDFile:
         self._validate_columns(strict=True)
 
         # call function to create metadata
-        self._spatial_metadata = self._trip_metadata()
+        # TODO : reenable this (currently avoiding because of test coverage gaps around missing spatial columns)
+        # self._spatial_metadata = self._trip_spatial_metadata()
 
     def _validate_columns(self, strict: bool = True):
 
@@ -101,21 +111,21 @@ class OBDFile:
                 # Alerts the user but allows the object to be created
                 logger.warning("%s. Some features may be degraded.", error_msg)
 
-    def _trip_metadata(self) -> dict:
+    def _trip_spatial_metadata(self) -> dict:
         """Extract metadata from the raw DataFrame for use in Trip construction."""
         longmean, longstd = self._df["Longitude"].mean(), self._df["Longitude"].std()
         latmean, latstd = self._df["Latitude"].mean(), self._df["Latitude"].std()
         alt_mean, alt_std = self._df["Altitude"].mean(), self._df["Altitude"].std()
         return {
-            "lon_mean": longmean,
-            "lon_std": longstd,
-            "lat_mean": latmean,
-            "lat_std": latstd,
-            "alt_mean": alt_mean,
-            "alt_std": alt_std,
+            "lon_mean": float(longmean),
+            "lon_std": float(longstd),
+            "lat_mean": float(latmean),
+            "lat_std": float(latstd),
+            "alt_mean": float(alt_mean),
+            "alt_std": float(alt_std),
         }
 
-    # ── Constructors ──────────────────────────────────────────────────────────
+    # region ── Constructors ──────────────────────────────────────────────────────────
 
     @classmethod
     def from_xlsx(cls, path: str | Path) -> "OBDFile":
@@ -237,7 +247,9 @@ class OBDFile:
         else:
             raise ValueError(f"Unsupported file extension: {ext}")
 
-    # ── Persistence ───────────────────────────────────────────────────────────
+    # end region
+
+    # region Persistence ───────────────────────────────────────────────────────────
 
     def to_parquet(
         self,
@@ -287,7 +299,9 @@ class OBDFile:
             version="2.6",
         )
 
-    # ── Properties ────────────────────────────────────────────────────────────
+    # end region
+
+    # region  ── Properties ────────────────────────────────────────────────────────────
 
     @property
     def parquet_name(self) -> str:
@@ -338,7 +352,34 @@ class OBDFile:
         """Return the full raw DataFrame."""
         return self._df.copy()
 
-    # ── Quality reporting ─────────────────────────────────────────────────────
+    # end region
+
+    # region  ── Auxilliary functions ─────────────────────────────────────────────────────
+
+    def get_metrics(self, config: "ProcessingConfig |None" = None) -> dict:
+        """Get the full metrics
+
+        Args:
+            processing (ProcessingConfig, optional): _description_. Defaults to None.
+
+        Returns:
+            dict: _description_
+        """
+        from drive_cycle_calculator.processing_config import DEFAULT_CONFIG
+        from drive_cycle_calculator.trip import Trip
+
+        if config is None:
+            config = DEFAULT_CONFIG
+
+        tr = self.to_trip(config=config)
+        metrics = tr.metrics
+        spatial_metadata = self._trip_spatial_metadata()
+        metrics.update(spatial_metadata)
+        return metrics
+
+    # end region
+
+    # region  ── Quality reporting ─────────────────────────────────────────────────────
 
     def quality_report(self) -> dict:
         """Return a data-quality summary for this file.
@@ -405,7 +446,9 @@ class OBDFile:
             missing_curated_cols=missing_curated_cols,
         )
 
-    # ── Trip construction ─────────────────────────────────────────────────────
+    # end region
+
+    # region  ── Trip construction ─────────────────────────────────────────────────────
 
     def to_trip(self, config: "ProcessingConfig | None" = None) -> "Trip":
         """Process the curated data and return a Trip.
@@ -436,8 +479,10 @@ class OBDFile:
         processed_df = config.apply(self.curated_df)
         return Trip(df=processed_df, name=self.name, stop_threshold_kmh=config.stop_threshold_kmh)
 
+    # end region
 
-# ── Module-level helpers ──────────────────────────────────────────────────────
+
+# region  ── Module-level helpers ──────────────────────────────────────────────────────
 
 # Columns excluded from numeric coercion (they hold timestamp strings on load,
 # then converted to datetime64 at construction time via _parse_timestamps).

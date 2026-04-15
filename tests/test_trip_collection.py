@@ -24,6 +24,9 @@ def _make_raw_df(n: int = 20, speed_kmh: float = 30.0) -> pd.DataFrame:
             "CO\u2082 in g/km (Average)(g/km)": [120.0] * n,
             "Engine Load(%)": [50.0] * n,
             "Fuel flow rate/hour(l/hr)": [2.0] * n,
+            "Longitude": [24.0] * n,
+            "Latitude": [60.0] * n,
+            "Altitude": [100.0] * n,
         }
     )
 

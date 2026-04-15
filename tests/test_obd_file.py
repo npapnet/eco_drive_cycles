@@ -26,6 +26,9 @@ def _make_raw_df(n: int = 10, speed_kmh: float = 30.0) -> pd.DataFrame:
             "Engine Load(%)": [50.0] * n,
             "Fuel flow rate/hour(l/hr)": [2.0] * n,
             "Extra Column": ["x"] * n,  # should be preserved in archive
+            "Longitude": [24.0] * n,
+            "Latitude": [60.0] * n,
+            "Altitude": [100.0] * n,
         }
     )
 
@@ -82,6 +85,9 @@ class TestFromXlsx:
                 "CO\u2082 in g/km (Average)(g/km)": [120.0] * 10,
                 "Engine Load(%)": [50.0] * 10,
                 "Fuel flow rate/hour(l/hr)": [2.0] * 10,
+                "Longitude": [24.0] * 10,
+                "Latitude": [60.0] * 10,
+                "Altitude": [100.0] * 10,
             }
         )
         p = tmp_path / "dash_test.xlsx"
@@ -236,6 +242,7 @@ class TestToParquet:
         p = tmp_path / "nodict.parquet"
         OBDFile(_make_raw_df(), "t").to_parquet(p)
         import pyarrow.parquet as pq_
+
         assert pq_.read_table(p) is not None
 
     def test_use_dictionary_true(self, tmp_path):
@@ -243,6 +250,7 @@ class TestToParquet:
         p = tmp_path / "dict.parquet"
         OBDFile(_make_raw_df(), "t").to_parquet(p, use_dictionary=True)
         import pyarrow.parquet as pq_
+
         table = pq_.read_table(p)
         assert table is not None
         assert len(table) == 10
@@ -252,6 +260,7 @@ class TestToParquet:
         p = tmp_path / "dict_list.parquet"
         OBDFile(_make_raw_df(), "t").to_parquet(p, use_dictionary=["Engine Load(%)"])
         import pyarrow.parquet as pq_
+
         assert pq_.read_table(p) is not None
 
 
@@ -317,9 +326,9 @@ class TestParseTimestamps:
         df = pd.DataFrame({"GPS Time": ["Mon Sep 22 10:30:00 +0300 2019"]})
         _parse_timestamps(df)
         # Original df must not be mutated — dtype should still be non-datetime
-        assert not pd.api.types.is_datetime64_any_dtype(
-            df["GPS Time"]
-        ), "Original df must not be mutated"
+        assert not pd.api.types.is_datetime64_any_dtype(df["GPS Time"]), (
+            "Original df must not be mutated"
+        )
 
 
 # ── curated_df ────────────────────────────────────────────────────────────────
@@ -338,10 +347,13 @@ class TestCuratedDf:
     def test_missing_col_not_raised(self):
         """curated_df silently omits absent CURATED_COLS — no error."""
         df = pd.DataFrame({"GPS Time": ["Mon Sep 22 10:30:00 +0300 2019"]})
-        obd = OBDFile(df, "sparse")
-        curated = obd.curated_df  # must not raise
-        assert "GPS Time" in curated.columns
-        assert "Speed (OBD)(km/h)" not in curated.columns
+        with pytest.raises(ValueError) as exc_info:
+            obd = OBDFile(df, "sparse")
+        assert str(exc_info.value)[:10] == "DataFrame "
+
+        # curated = obd.curated_df  # must not raise
+        # assert "GPS Time" in curated.columns
+        # assert "Speed (OBD)(km/h)" not in curated.columns
 
     def test_is_copy(self):
         """curated_df returns a copy — mutations don't affect internal _df."""
@@ -383,9 +395,12 @@ class TestQualityReport:
     def test_missing_curated_cols_reports_absent_columns(self):
         """missing_curated_cols lists CURATED_COLS absent from the file."""
         df = pd.DataFrame({"GPS Time": ["Mon Sep 22 10:30:00 +0300 2019"]})
-        obd = OBDFile(df, "sparse")
-        report = obd.quality_report()
-        assert "Speed (OBD)(km/h)" in report["missing_curated_cols"]
+        with pytest.raises(ValueError) as exc_info:
+            obd = OBDFile(df, "sparse")
+        assert str(exc_info.value)[:10] == "DataFrame "
+        # Previous behaviour allowed missing CURATED_COLS but reported them in the quality report
+        # report = obd.quality_report()
+        # assert "Speed (OBD)(km/h)" in report["missing_curated_cols"]
 
     def test_gps_gap_count_detects_large_gap(self):
         """GPS gaps > 5s are counted."""
@@ -405,6 +420,9 @@ class TestQualityReport:
                 "CO\u2082 in g/km (Average)(g/km)": [120.0] * 6,
                 "Engine Load(%)": [50.0] * 6,
                 "Fuel flow rate/hour(l/hr)": [2.0] * 6,
+                "Longitude": [24.0] * 6,
+                "Latitude": [60.0] * 6,
+                "Altitude": [100.0] * 6,
             }
         )
         obd = OBDFile(df, "gap_test")
@@ -430,10 +448,13 @@ class TestQualityReport:
     def test_missing_speed_col_returns_nan(self):
         """speed_min/max are NaN when speed column is absent."""
         df = pd.DataFrame({"GPS Time": ["Mon Sep 22 10:30:00 +0300 2019"]})
-        obd = OBDFile(df, "no_speed")
-        report = obd.quality_report()
-        assert np.isnan(report["speed_min_kmh"])
-        assert np.isnan(report["speed_max_kmh"])
+        with pytest.raises(ValueError) as exc_info:
+            obd = OBDFile(df, "no_speed")
+        assert str(exc_info.value)[:10] == "DataFrame "
+        ##  Previous behaviour allowed missing speed column but returned NaN for min/max
+        # report = obd.quality_report()
+        # assert np.isnan(report["speed_min_kmh"])
+        # assert np.isnan(report["speed_max_kmh"])
 
     def test_empty_df(self):
         """quality_report handles empty DataFrame without raising."""
@@ -475,9 +496,11 @@ class TestToTrip:
     def test_missing_curated_col_raises(self):
         """to_trip() raises ValueError if any CURATED_COL is missing."""
         df = pd.DataFrame({"GPS Time": ["Mon Sep 22 10:30:00 +0300 2019"]})
-        obd = OBDFile(df, "sparse")
-        with pytest.raises(ValueError, match="Missing required column"):
-            obd.to_trip()
+        with pytest.raises(ValueError, match="DataFrame is missing") as exc_info:
+            obd = OBDFile(df, "sparse")
+        assert str(exc_info.value)[:10] == "DataFrame "
+        # with pytest.raises(ValueError, match="Missing required column"):
+        #     obd.to_trip()
 
     def test_custom_config_applied(self):
         """ProcessingConfig.window is respected by to_trip."""
@@ -500,7 +523,18 @@ class TestParquetName:
     _FMT = "Mon Sep 22 10:30:{:02d} +0300 2019"
 
     def _make_obd(self, gps_times: list) -> OBDFile:
-        df = pd.DataFrame({"GPS Time": gps_times})
+        df = pd.DataFrame(
+            {
+                "GPS Time": gps_times,
+                "Speed (OBD)(km/h)": [30.0] * len(gps_times),
+                "CO\u2082 in g/km (Average)(g/km)": [120.0] * len(gps_times),
+                "Engine Load(%)": [50.0] * len(gps_times),
+                "Fuel flow rate/hour(l/hr)": [2.0] * len(gps_times),
+                "Longitude": [24.0] * len(gps_times),
+                "Latitude": [60.0] * len(gps_times),
+                "Altitude": [100.0] * len(gps_times),
+            }
+        )
         return OBDFile(df, "fallback_name")
 
     def test_format_matches_pattern(self):
@@ -570,8 +604,11 @@ class TestParquetName:
     def test_no_gps_time_column_falls_back(self):
         """Falls back to self.name when GPS Time column is absent."""
         df = pd.DataFrame({"Speed (OBD)(km/h)": [30.0]})
-        obd = OBDFile(df, "fallback_name")
-        assert obd.parquet_name == "fallback_name"
+        with pytest.raises(ValueError) as exc_info:
+            obd = OBDFile(df, "fallback_name")
+        assert str(exc_info.value)[:10] == "DataFrame "
+        ## Previous behaviour allowed missing GPS Time column but fell back to name
+        # assert obd.parquet_name == "fallback_name"
 
     def test_all_unparseable_falls_back(self):
         """Falls back to self.name when GPS Time column is fully unparseable."""

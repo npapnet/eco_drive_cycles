@@ -61,6 +61,9 @@ def _make_raw_df(
             "CO\u2082 in g/km (Average)(g/km)": [a2_value] + [120.0] * (rows - 1),
             "Engine Load(%)": [a2_value] + [50.0] * (rows - 1),
             "Fuel flow rate/hour(l/hr)": [a2_value] + [2.0] * (rows - 1),
+            "Longitude": [a2_value] + [24.0] * (rows - 1),
+            "Latitude": [a2_value] + [60.0] * (rows - 1),
+            "Altitude": [a2_value] + [100.0] * (rows - 1),
         }
     )
     return df
@@ -289,6 +292,9 @@ def _make_archive_df(n: int = 10, speed_kmh: float = 30.0) -> pd.DataFrame:
             "CO\u2082 in g/km (Average)(g/km)": [120.0] * n,
             "Engine Load(%)": [50.0] * n,
             "Fuel flow rate/hour(l/hr)": [2.0] * n,
+            "Longitude": [24.0] * n,
+            "Latitude": [60.0] * n,
+            "Altitude": [100.0] * n,
         }
     )
 

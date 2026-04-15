@@ -47,48 +47,38 @@ obd = OBDFile.from_parquet(FNAME)
 obd._df.columns
 # %%
 
-# longmean, longstd = obd._df["Longitude"].mean(), obd._df["Longitude"].std()
-# latmean, latstd = obd._df["Latitude"].mean(), obd._df["Latitude"].std()
-# alt_mean, alt_std = obd._df["Altitude"].mean(), obd._df["Altitude"].std()
-# print(f"Longitude: mean={longmean}, std={longstd}")
-# print(f"Latitude: mean={latmean}, std={latstd}")
-# print(f"Altitude: mean={alt_mean}, std={alt_std}")
-
-obd._trip_metadata()
-
+spatial_metadata = obd._trip_spatial_metadata()
+print(spatial_metadata)
 # TODO: when creating a trip pass this as metadata to the trip object.
 # %%
 
 tr = obd.to_trip()
 # %%
-tr.date
-tr.duration
-tr.max_speed
-tr.mean_acceleration
-tr.mean_deceleration
-tr.mean_speed
+print(f"Date: {tr.date}")
+
+
+# metrics = tr.metrics
+metrics.update(spatial_metadata)
+
+metrics2 = obd.get_metrics()
+
+# %%
+metrics_lst = []
+for pq_file in pq_files:
+    logging.info(f"Reading metadata from: {pq_file}")
+    obd = OBDFile.from_parquet(pq_file)
+    metrics = obd.get_metrics()
+    metrics['name'] = pq_file.stem
+    tr = obd.to_trip()
+    metrics['date'] = tr.date
+    metrics_lst.append(metrics)
+    # logging.info(f"Metrics: {metrics}")
 
 
 # %%
+metrics_df = pd.DataFrame(metrics_lst)
+print(metrics_df)
 # %%
-
-longser = obd._df["Longitude"]
-
-for i, val in enumerate(longser):
-    try:
-        float(val)
-    except ValueError:
-        logging.warning(f"Value at index {i} is not a valid float: {val}")
-
-# %%
-obd.name
-# %%
-import plotnine as p9
-
-p = (
-    p9.ggplot(obd._df, p9.aes(x="GPS Time", y="G(z)"))
-    + p9.geom_point(alpha=0.5)
-    + p9.theme_minimal()
-)
-p
+FNAME_OUT = ROOTDIR / "data" / "trips_metrics.csv"
+metrics_df.to_csv(FNAME_OUT, index=False)
 # %%
