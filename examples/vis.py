@@ -4,14 +4,32 @@ Code for visualising the vicinity of the trip data
 """
 
 # %%
+from pathlib import Path
+import urllib
 import numpy as np
 import pandas as pd
 import geopandas as gpd
 from plotnine import ggplot, aes, geom_map, geom_polygon, coord_fixed, theme_minimal
 
-# 1. Fetch map geometry directly from the Natural Earth AWS link (replaces deprecated gpd.datasets)
+# # 1. Fetch map geometry directly from the Natural Earth AWS link (replaces deprecated gpd.datasets)
+# url = "https://naturalearth.s3.amazonaws.com/110m_cultural/ne_110m_admin_0_countries.zip"
+# world = gpd.read_file(url)
+
+
+# 1. Define local cache directory and file path
+cache_dir = Path(".cache")
+cache_dir.mkdir(parents=True, exist_ok=True)  # Ensure directory exists
+file_path = cache_dir / "ne_110m_admin_0_countries.zip"
 url = "https://naturalearth.s3.amazonaws.com/110m_cultural/ne_110m_admin_0_countries.zip"
-world = gpd.read_file(url)
+
+# 2. Download the file only if it doesn't already exist locally
+if not file_path.exists():
+    urllib.request.urlretrieve(url, file_path)
+
+# 3. Read the geometry from the locally cached zip file
+# geopandas uses fiona under the hood, which can read zipped shapefiles using the zip:// URI scheme
+world = gpd.read_file(f"zip://{file_path.absolute()}")
+
 
 # In the raw Natural Earth data, the country name column is 'ADMIN' (or 'NAME') instead of 'name'
 greece = world[world["ADMIN"] == "Greece"]
