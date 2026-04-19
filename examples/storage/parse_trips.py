@@ -91,7 +91,7 @@ import pandas as pd
 import geopandas as gpd
 import plotnine as p9
 
-def plot_trip_vicinity(df: pd.DataFrame, xlims:list = (19, 29), ylims:list=(34, 42), sigma_multiplier: float = 6.0, force_download:bool = False) -> ggplot:
+def plot_trip_vicinity(df: pd.DataFrame, xlims:list = (19, 29), ylims:list=(34, 42), sigma_multiplier: float = 6.0, force_download:bool = False) -> "p9.ggplot":
     """ 
 
     Args:

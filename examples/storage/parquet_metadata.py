@@ -62,5 +62,21 @@ metadata = pqf.metadata
 mtd = pqf.schema.to_arrow_schema().metadata
 print(type(mtd))
 # %%
-mtd.get(b"format_version")
+type(mtd.get(b"format_version"))
+# %% Converting bytes to dict
+import json
+
+# Assuming the metadata is stored under the key 'dcc_metadata'
+metadata_bytes = mtd.get(b"dcc_metadata")
+if metadata_bytes:
+    metadata_dict = json.loads(metadata_bytes.decode("utf-8"))
+    print("Metadata as dictionary:")
+    print(metadata_dict)
+else:
+    print("No 'dcc_metadata' found in the metadata.")
+# %%
+for key, value in metadata_dict.items():
+    print(f"{key}: {value}")
+# %%
+
 # %%

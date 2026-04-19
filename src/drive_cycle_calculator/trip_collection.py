@@ -241,7 +241,7 @@ class TripCollection:
                 conn.execute(
                     """
                     INSERT OR REPLACE INTO trip_metadata VALUES (
-                        ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?
+                        ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, ?
                     )
                     """,
                     [
@@ -254,7 +254,6 @@ class TripCollection:
                         m["mean_dec"] if not np.isnan(m["mean_dec"]) else None,
                         m["stop_pct"] if not np.isnan(m["stop_pct"]) else None,
                         m["stops"],
-                        parquet_path,
                         config.config_hash,
                     ],
                 )
@@ -294,7 +293,9 @@ class TripCollection:
             raise FileNotFoundError(f"Catalog not found: {db_path}")
 
         with duckdb.connect(str(db_path), read_only=True) as conn:
-            rows = conn.execute("SELECT trip_id, parquet_path FROM trip_metadata").fetchall()
+            tables = {r[0] for r in conn.execute("SHOW TABLES").fetchall()}
+            table = "trip_metrics" if "trip_metrics" in tables else "trip_metadata"
+            rows = conn.execute(f"SELECT trip_id, parquet_path FROM {table}").fetchall()
 
         trips = []
         for trip_id, parquet_path in rows:

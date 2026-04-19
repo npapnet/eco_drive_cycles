@@ -81,7 +81,7 @@ def run_gui(
                 status_var.set(f"Archiving {i}/{len(files)}: {f.name}…")
                 try:
                     obd = OBDFile.from_file(f)
-                    dest = archive_dir / f"{obd.name}.parquet"
+                    dest = archive_dir / f"{obd.parquet_name}.parquet"
                     log.info("  [%d/%d] Writing archive: %s", i, len(files), dest.name)
                     obd.to_parquet(dest)
                 except Exception as e:

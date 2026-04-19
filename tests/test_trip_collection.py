@@ -148,74 +148,68 @@ class TestFromArchiveParquets:
 
 
 class TestDuckDBCatalog:
-    def test_config_hash_written_to_catalog(self, tmp_path):
-        """to_duckdb_catalog stores config_hash in trip_metadata."""
+    def test_from_catalog_missing_db_raises(self, tmp_path):
+        """Non-existent db_path raises FileNotFoundError."""
+        with pytest.raises(FileNotFoundError):
+            TripCollection.from_duckdb_catalog(tmp_path / "does_not_exist.duckdb")
+
+    def test_from_catalog_empty_db_returns_empty(self, tmp_path):
+        """Catalog with zero rows in trip_metrics returns empty TripCollection."""
         import duckdb
 
-        p = tmp_path / "trip.parquet"
-        _write_archive(p)
-        tc = TripCollection.from_archive_parquets(tmp_path)
-        db = tmp_path / "catalog.db"
-        config = ProcessingConfig(window=4)
-        tc.to_duckdb_catalog(db, config=config)
-        with duckdb.connect(str(db), read_only=True) as conn:
-            rows = conn.execute("SELECT config_hash FROM trip_metadata").fetchall()
-        assert rows[0][0] == config.config_hash
-
-    def test_eager_load_via_catalog(self, tmp_path):
-        """from_duckdb_catalog returns Trips with loaded DataFrames (eager)."""
-        p = tmp_path / "trip.parquet"
-        _write_archive(p, speed_kmh=45.0)
-        tc = TripCollection.from_archive_parquets(tmp_path)
-        db = tmp_path / "catalog.db"
-        tc.to_duckdb_catalog(db)
-        loaded_tc = TripCollection.from_duckdb_catalog(db)
-        # Accessing metrics must not raise — data is loaded eagerly
-        assert loaded_tc.trips[0].mean_speed >= 0
-
-    def test_alter_table_migration_for_existing_catalog(self, tmp_path):
-        """to_duckdb_catalog adds config_hash column to catalogs that lack it."""
-        import duckdb
-
-        db = tmp_path / "old_catalog.db"
-        # Create a catalog without config_hash
+        db = tmp_path / "empty.duckdb"
         with duckdb.connect(str(db)) as conn:
             conn.execute("""
-                CREATE TABLE trip_metadata (
-                    trip_id VARCHAR PRIMARY KEY,
-                    parquet_path VARCHAR NOT NULL,
-                    start_time TIMESTAMP, end_time TIMESTAMP,
-                    duration_s DOUBLE, avg_velocity_kmh DOUBLE,
-                    max_velocity_kmh DOUBLE, avg_acceleration_ms2 DOUBLE,
-                    avg_deceleration_ms2 DOUBLE, idle_time_pct DOUBLE,
-                    stop_count INTEGER, estimated_fuel_liters DOUBLE,
-                    wavelet_anomaly_count INTEGER, markov_matrix_uri VARCHAR,
-                    pla_trajectory_uri VARCHAR
+                CREATE TABLE trip_metrics (
+                    trip_id              VARCHAR PRIMARY KEY,
+                    parquet_path         VARCHAR,
+                    parquet_id           VARCHAR,
+                    start_time           TIMESTAMPTZ,
+                    end_time             TIMESTAMPTZ,
+                    duration_s           DOUBLE,
+                    avg_velocity_kmh     DOUBLE,
+                    config_hash          VARCHAR,
+                    config_snapshot      VARCHAR
                 )
             """)
-        # Now call to_duckdb_catalog — should migrate silently
+        tc = TripCollection.from_duckdb_catalog(db)
+        assert len(tc) == 0
+
+    def test_eager_load_via_catalog(self, tmp_path):
+        """from_duckdb_catalog loads trips eagerly from trip_metrics table."""
+        import duckdb
+
         p = tmp_path / "trip.parquet"
-        _write_archive(p)
-        tc = TripCollection.from_archive_parquets(tmp_path)
-        tc.to_duckdb_catalog(db)
-        with duckdb.connect(str(db), read_only=True) as conn:
-            cols = [
-                r[0]
-                for r in conn.execute(
-                    "SELECT column_name FROM information_schema.columns "
-                    "WHERE table_name='trip_metadata'"
-                ).fetchall()
-            ]
-        assert "config_hash" in cols
+        _write_archive(p, speed_kmh=45.0)
+        db = tmp_path / "catalog.db"
+        with duckdb.connect(str(db)) as conn:
+            conn.execute("""
+                CREATE TABLE trip_metrics (
+                    trip_id VARCHAR PRIMARY KEY,
+                    parquet_path VARCHAR
+                )
+            """)
+            conn.execute("INSERT INTO trip_metrics VALUES (?, ?)", [p.stem, str(p)])
+        loaded_tc = TripCollection.from_duckdb_catalog(db)
+        assert loaded_tc.trips[0].mean_speed >= 0
 
     def test_stale_parquet_path_warns_at_load(self, tmp_path):
-        """from_duckdb_catalog warns+skips trips whose archive Parquet is gone."""
-        p = tmp_path / "trip.parquet"
-        _write_archive(p)
-        tc = TripCollection.from_archive_parquets(tmp_path)
+        """from_duckdb_catalog warns+skips trips whose archive Parquet is gone (trip_metrics)."""
+        import duckdb
+
         db = tmp_path / "catalog.db"
-        tc.to_duckdb_catalog(db)
-        p.unlink()  # delete archive after catalog is written
+        dead_path = tmp_path / "does_not_exist.parquet"
+        with duckdb.connect(str(db)) as conn:
+            conn.execute("""
+                CREATE TABLE trip_metrics (
+                    trip_id VARCHAR PRIMARY KEY,
+                    parquet_path VARCHAR
+                )
+            """)
+            conn.execute(
+                "INSERT INTO trip_metrics VALUES (?, ?)",
+                ["dead_trip", str(dead_path)],
+            )
         with pytest.warns(UserWarning, match="cannot load"):
             loaded = TripCollection.from_duckdb_catalog(db)
         assert len(loaded) == 0
@@ -230,7 +224,9 @@ class TestSimilarityTC:
         trips = []
         for i, spd in enumerate(speeds):
             p = tmp_path / f"trip_{i}.parquet"
-            _write_archive(p, speed_kmh=spd, n=30)
+            df = _make_raw_df(n=30, speed_kmh=spd)
+            df["Longitude"] = float(24 + i)  # unique coords → unique parquet_id per trip
+            OBDFile(df, f"trip_{i}").to_parquet(p)
             trips.append(OBDFile.from_parquet(p).to_trip())
         return TripCollection(trips)
 

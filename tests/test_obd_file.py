@@ -270,18 +270,23 @@ class TestToParquet:
 class TestStripColumnNames:
     def test_leading_spaces_removed(self):
         df = pd.DataFrame({" A": [1], "B ": [2], "\tC\t": [3]})
-        obd = OBDFile(df, "t")
-        assert list(obd._df.columns) == ["A", "B", "C"]
+        obd = OBDFile(df, "t", strict=False)
+        # Original columns are stripped; NaN-injected curated cols come after
+        assert "A" in obd._df.columns
+        assert " A" not in obd._df.columns
+        assert "B" in obd._df.columns
+        assert "\tC\t" not in obd._df.columns
 
     def test_clean_names_unchanged(self):
         df = pd.DataFrame({"GPS Time": ["x"], "Speed (OBD)(km/h)": [30.0]})
-        obd = OBDFile(df, "t")
-        assert list(obd._df.columns) == ["GPS Time", "Speed (OBD)(km/h)"]
+        obd = OBDFile(df, "t", strict=False)
+        assert "GPS Time" in obd._df.columns
+        assert "Speed (OBD)(km/h)" in obd._df.columns
 
     def test_device_time_with_leading_space_normalised(self):
         """The classic Torque " Device Time" column is cleaned to "Device Time"."""
         df = pd.DataFrame({" Device Time": ["Mon Sep 22 10:30:00 +0300 2019"]})
-        obd = OBDFile(df, "t")
+        obd = OBDFile(df, "t", strict=False)
         assert "Device Time" in obd._df.columns
         assert " Device Time" not in obd._df.columns
 
@@ -488,10 +493,10 @@ class TestToTrip:
         assert set(trip._df.columns) == expected_cols
 
     def test_name_preserved(self):
-        """Trip.name matches OBDFile.name."""
+        """Trip.name matches OBDFile.parquet_name (not obd.name)."""
         obd = OBDFile(_make_raw_df(), "my_session")
         trip = obd.to_trip()
-        assert trip.name == "my_session"
+        assert trip.name == obd.parquet_name
 
     def test_missing_curated_col_raises(self):
         """to_trip() raises ValueError if any CURATED_COL is missing."""
@@ -538,12 +543,12 @@ class TestParquetName:
         return OBDFile(df, "fallback_name")
 
     def test_format_matches_pattern(self):
-        """parquet_name is 't<YYYYMMDD-hhmmss>-<duration_s>' for a valid trip."""
+        """parquet_name is 't<YYYYMMDD-hhmmss>-<duration_s>-<hash6>' for a valid trip."""
         import re
 
         obd = self._make_obd([self._FMT.format(i) for i in range(10)])
         name = obd.parquet_name
-        assert re.fullmatch(r"t\d{8}-\d{6}-\d+", name), f"Unexpected name: {name!r}"
+        assert re.fullmatch(r"t\d{8}-\d{6}-\d+-[0-9a-f]{6}", name), f"Unexpected name: {name!r}"
 
     def test_start_timestamp_correct(self):
         """UTC date and time in the name reflect the first valid GPS row."""
@@ -555,9 +560,10 @@ class TestParquetName:
     def test_duration_correct(self):
         """Duration in seconds equals last-minus-first GPS timestamp."""
         # 10 rows at 1-second intervals → duration = 9 s
+        # Format: t<YYYYMMDD>-<HHMMSS>-<duration_s>-<hash6>; duration is at index 2.
         obd = self._make_obd([self._FMT.format(i) for i in range(10)])
-        duration_s = int(obd.parquet_name.rsplit("-", 1)[-1])
-        assert duration_s == 9
+        parts = obd.parquet_name.split("-")
+        assert int(parts[2]) == 9
 
     def test_only_first_and_last_rows_parsed(self, monkeypatch):
         """parquet_name calls to_datetime exactly twice with size-1 series.
@@ -592,14 +598,14 @@ class TestParquetName:
         obd = self._make_obd(times)
         name = obd.parquet_name
         assert name.startswith("t20190922-"), f"Unexpected name: {name!r}"
-        duration_s = int(name.rsplit("-", 1)[-1])
-        assert duration_s == 5
+        parts = name.split("-")
+        assert int(parts[2]) == 5
 
     def test_single_row_duration_zero(self):
         """A trip with a single GPS row produces duration_s = 0."""
         obd = self._make_obd([self._FMT.format(0)])
-        name = obd.parquet_name
-        assert name.endswith("-0"), f"Expected '-0' suffix, got: {name!r}"
+        parts = obd.parquet_name.split("-")
+        assert parts[2] == "0", f"Expected duration segment '0', got: {obd.parquet_name!r}"
 
     def test_no_gps_time_column_falls_back(self):
         """Falls back to self.name when GPS Time column is absent."""
@@ -614,3 +620,141 @@ class TestParquetName:
         """Falls back to self.name when GPS Time column is fully unparseable."""
         obd = self._make_obd(["not-a-date", "also-not-a-date"])
         assert obd.parquet_name == "fallback_name"
+
+    def test_same_gps_data_produces_same_hash(self):
+        """parquet_name is deterministic: same GPS data → same hash suffix."""
+        obd1 = OBDFile(_make_raw_df(), "session_a")
+        obd2 = OBDFile(_make_raw_df(), "session_b")
+        h1 = obd1.parquet_name.split("-")[-1]
+        h2 = obd2.parquet_name.split("-")[-1]
+        assert h1 == h2
+
+    def test_different_gps_data_produces_different_hash(self):
+        """Different GPS data → different hash suffix."""
+        df1 = _make_raw_df()
+        df2 = _make_raw_df()
+        df2["Longitude"] = 25.0
+        obd1 = OBDFile(df1, "session")
+        obd2 = OBDFile(df2, "session")
+        assert obd1.parquet_name.split("-")[-1] != obd2.parquet_name.split("-")[-1]
+
+    def test_gps_columns_absent_uses_name_hash(self):
+        """Absent Lat/Lon → parquet_name uses sha256(name.encode())[:6] in any mode."""
+        import hashlib
+
+        df = pd.DataFrame(
+            {
+                "GPS Time": ["Mon Sep 22 10:30:00 +0300 2019"],
+                "Speed (OBD)(km/h)": [30.0],
+                "CO\u2082 in g/km (Average)(g/km)": [120.0],
+                "Engine Load(%)": [50.0],
+                "Fuel flow rate/hour(l/hr)": [2.0],
+            }
+        )
+        obd = OBDFile(df, "my_trip")
+        expected = hashlib.sha256("my_trip".encode()).hexdigest()[:6]
+        assert obd.parquet_name.endswith(f"-{expected}")
+
+    def test_gps_columns_absent_permissive_uses_name_hash(self):
+        """Permissive mode + absent Lat/Lon → same name-hash fallback."""
+        import hashlib
+
+        df = pd.DataFrame({"GPS Time": ["Mon Sep 22 10:30:00 +0300 2019"]})
+        obd = OBDFile(df, "my_trip", strict=False)
+        expected = hashlib.sha256("my_trip".encode()).hexdigest()[:6]
+        assert obd.parquet_name.endswith(f"-{expected}")
+
+
+# ── strict mode ───────────────────────────────────────────────────────────────
+
+
+class TestStrictMode:
+    def test_strict_true_raises_for_missing_curated_col(self):
+        """strict=True (default): missing CURATED_COL → ValueError at construction."""
+        df = pd.DataFrame({"GPS Time": ["Mon Sep 22 10:30:00 +0300 2019"]})
+        with pytest.raises(ValueError, match="missing required columns"):
+            OBDFile(df, "t", strict=True)
+
+    def test_strict_false_injects_nan_for_missing_curated_col(self):
+        """strict=False: missing CURATED_COL → NaN column injected, no ValueError."""
+        df = pd.DataFrame({"GPS Time": ["Mon Sep 22 10:30:00 +0300 2019"]})
+        obd = OBDFile(df, "t", strict=False)
+        assert "Speed (OBD)(km/h)" in obd._df.columns
+        assert pd.isna(obd._df["Speed (OBD)(km/h)"].iloc[0])
+
+    def test_from_xlsx_propagates_strict_false(self, tmp_path):
+        """from_xlsx accepts strict=False and propagates it through."""
+        df = pd.DataFrame({"GPS Time": ["Mon Sep 22 10:30:00 +0300 2019"]})
+        p = tmp_path / "sparse.xlsx"
+        df.to_excel(p, index=False)
+        obd = OBDFile.from_xlsx(p, strict=False)
+        assert "Speed (OBD)(km/h)" in obd._df.columns
+
+    def test_from_csv_propagates_strict_false(self, tmp_path):
+        """from_csv accepts strict=False and propagates it through."""
+        df = pd.DataFrame({"GPS Time": ["Mon Sep 22 10:30:00 +0300 2019"]})
+        p = tmp_path / "sparse.csv"
+        df.to_csv(p, index=False, sep=",")
+        obd = OBDFile.from_csv(p, sep=",", strict=False)
+        assert "Speed (OBD)(km/h)" in obd._df.columns
+
+    def test_from_parquet_propagates_strict_false(self, tmp_path):
+        """from_parquet accepts strict=False and propagates it through."""
+        import pyarrow as pa
+        import pyarrow.parquet as _pq
+
+        df = pd.DataFrame(
+            {"GPS Time": pd.to_datetime(["2019-09-22 07:30:00"], utc=True)}
+        )
+        _pq.write_table(pa.Table.from_pandas(df), tmp_path / "sparse.parquet")
+        obd = OBDFile.from_parquet(tmp_path / "sparse.parquet", strict=False)
+        assert "Speed (OBD)(km/h)" in obd._df.columns
+
+
+# ── to_parquet metadata ───────────────────────────────────────────────────────
+
+
+class TestToParquetMetadata:
+    def test_embeds_dcc_metadata_key(self, tmp_path):
+        """to_parquet writes dcc_metadata JSON in PyArrow schema metadata."""
+        from drive_cycle_calculator.schema import ParquetMetadata
+
+        obd = OBDFile(_make_raw_df(), "embed_test")
+        p = tmp_path / "out.parquet"
+        obd.to_parquet(p)
+        schema_meta = pq.read_metadata(p).metadata
+        assert b"dcc_metadata" in schema_meta
+        meta = ParquetMetadata.model_validate_json(schema_meta[b"dcc_metadata"])
+        assert meta.schema_version == "1.0"
+        assert len(meta.parquet_id) == 6
+        assert all(c in "0123456789abcdef" for c in meta.parquet_id)
+
+    def test_user_metadata_embedded(self, tmp_path):
+        """to_parquet(user_metadata=...) embeds user fields in dcc_metadata."""
+        from drive_cycle_calculator.schema import ParquetMetadata, UserMetadata
+
+        um = UserMetadata(user="alice", fuel_type="diesel")
+        obd = OBDFile(_make_raw_df(), "embed_test")
+        p = tmp_path / "out.parquet"
+        obd.to_parquet(p, user_metadata=um)
+        schema_meta = pq.read_metadata(p).metadata
+        meta = ParquetMetadata.model_validate_json(schema_meta[b"dcc_metadata"])
+        assert meta.user_metadata.user == "alice"
+        assert meta.user_metadata.fuel_type == "diesel"
+
+    def test_from_parquet_preserves_dcc_metadata(self, tmp_path):
+        """Round-trip: to_parquet + from_parquet — dcc_metadata remains accessible."""
+        from drive_cycle_calculator.schema import ParquetMetadata, UserMetadata
+
+        um = UserMetadata(user="bob")
+        obd = OBDFile(_make_raw_df(), "rt")
+        p = tmp_path / "rt.parquet"
+        obd.to_parquet(p, user_metadata=um)
+
+        obd2 = OBDFile.from_parquet(p)
+        assert obd2.name == "rt"
+
+        schema_meta = pq.read_metadata(p).metadata
+        meta = ParquetMetadata.model_validate_json(schema_meta[b"dcc_metadata"])
+        assert meta.user_metadata.user == "bob"
+        assert meta.parquet_id == obd.parquet_name.split("-")[-1]

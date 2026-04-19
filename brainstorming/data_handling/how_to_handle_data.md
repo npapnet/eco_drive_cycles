@@ -1,4 +1,4 @@
-# How to handle data
+# How to handle data (probably stale)
 
 This document should NOT be used by AI agents. It is a work in progress and is subject to change.
 

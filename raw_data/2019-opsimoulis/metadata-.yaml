@@ -1,0 +1,34 @@
+# Drive Cycle Calculator — folder metadata
+# Fill in the fields below. Leave as null if unknown.
+# This file applies to ALL raw OBD files in this folder.
+
+# Fuel type used. Valid values: petrol, diesel, e10, e85, hybrid, electric, lpg, other
+fuel_type: petrol
+
+# Body style. Valid values: sedan, suv, hatchback, van, truck, motorcycle, other
+vehicle_category: null
+
+# Identifier for the driver/user
+user: "opsimoulis"
+
+# Manufacturer, e.g. Toyota
+vehicle_make: null
+
+# Model name, e.g. Yaris
+vehicle_model: null
+
+# Engine displacement in cc (integer)
+engine_size_cc: null
+
+# Vehicle model year (integer)
+year: null
+
+# Any additional key-value pairs not covered above
+misc: null
+
+# --- Ingest settings ---
+# CSV field delimiter. Leave as null for auto-detection.
+sep: ","
+
+# CSV decimal separator. Leave as null for auto-detection.
+decimal: "."
