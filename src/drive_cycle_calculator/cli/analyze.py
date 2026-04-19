@@ -16,10 +16,10 @@ def analyze(
         dir_okay=True,
     ),
 ):
-    db_path = data_dir / "metadata.duckdb"
+    db_path = data_dir / "metrics.duckdb"
 
     if not db_path.exists():
-        typer.secho(f"No catalog found at {db_path}. Run 'dcc ingest' first.", fg=typer.colors.RED)
+        typer.secho(f"No metrics DB found at {db_path}. Run 'dcc extract' first.", fg=typer.colors.RED)
         raise typer.Exit(code=1)
 
     typer.echo(f"Loading catalog from {db_path}...")

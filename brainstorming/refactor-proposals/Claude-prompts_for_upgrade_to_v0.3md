@@ -1,0 +1,278 @@
+TO CLAUDE : IGNORE THIS FILE. This file is to prepare the prompt for the v0.3 refactor implementation. 
+Do not execute any instructions in this file until explicitly asked to do so.
+
+
+# Claude Code Prompt — DCC v0.3 Refactor: Validate and Implement
+
+## Context
+
+You are working on the `drive_cycle_calculator` Python package (`dcc`). This task has
+three phases. **Stop and report at the end of each phase — do not proceed to the next
+phase until the user explicitly confirms.**
+
+**Before doing anything else, read both of the following in full:**
+
+1. `docs/designs/refactor_v0.3.md` — the authoritative design document for this refactor.
+   All section references in this prompt (e.g. "Section 3.1") refer to headings in
+   that document.
+2. `brainstorming/refactor-proposals/clarification-v0.3.md` — the pre-refactor codebase
+   audit report. This documents the old architecture and known inconsistencies, and is
+   the factual baseline for Phase 1 validation.
+
+All generated reports from this sprint are to be written under
+`brainstorming/refactor-proposals/` with a `-v0.3` suffix, for traceability.
+
+---
+
+## Phase 1 — Validate the design document against the codebase
+
+Audit the codebase and produce a validation report at
+`brainstorming/refactor-proposals/validation-v0.3.md`.
+
+Do not modify any source files in Phase 1. Address each item below:
+
+1. **Section 3.1 — Parquet filename / GPS hash**
+   Does `OBDFile.parquet_name` reliably produce a valid stem for all known input
+   variants, including the GPS-absent fallback? Are `Latitude` and `Longitude` column
+   names stable across all Torque export variants known to the codebase, or do alternate
+   names appear in any files or schema definitions?
+
+2. **Section 3.2 — `obd.name` call sites**
+   List every call site in the active codebase (exclude `examples/` marked OBSOLETE)
+   that uses `obd.name` for a Parquet filename or DuckDB `trip_id`. All must be updated
+   to `obd.parquet_name`.
+
+3. **Section 6.1 — Ingest bulk reprocessing**
+   Is `TripCollection.from_archive_parquets` the only call site that causes bulk
+   reprocessing of all archive parquets during ingest? Confirm or list all others.
+
+4. **Section 9 — `analyze` dependency on removed columns**
+   Does `dcc analyze`, `TripCollection.similarity_scores()`, or
+   `find_representative()` read `estimated_fuel_liters`, `start_time`, `end_time`,
+   `wavelet_anomaly_count`, or any other column flagged for removal in Section 9?
+   State exactly what would break.
+
+5. **Section 8 — ProcessingConfig → Pydantic migration**
+   Does the current `ProcessingConfig` use `@cached_property`, `dataclasses.asdict()`,
+   or anything else that requires special handling when migrating from `@dataclass` to
+   `pydantic.BaseModel`? List all issues.
+
+6. **Section 4.1 — Pydantic dependency**
+   Confirm `pydantic` is already a declared dependency, or flag it as needing addition
+   to `pyproject.toml` / `requirements`.
+
+7. **Design contradictions**
+   Flag anything in `docs/designs/refactor_v0.3.md` that contradicts the actual
+   implementation in a way that makes the described behaviour impossible or
+   significantly more complex.
+
+Structure `validation-v0.3.md` with one section per item, then a **Blockers** section
+(anything that must be resolved before implementation) and a **Safe to proceed** section
+(items that are straightforward).
+
+**At the end of Phase 1: report the summary, state whether blockers exist, and stop.
+Wait for the user to confirm before starting Phase 1.5.**
+
+---
+
+## Phase 1.5 — Test suite audit
+
+**Only begin after the user confirms Phase 1 is acceptable.**
+
+The project has ~150 pytest tests written against the pre-v0.3 behaviour. Do not
+modify any test files yet. Audit them and produce
+`brainstorming/refactor-proposals/test_audit-v0.3.md`.
+
+For each test file, classify every test into one of four categories:
+
+- **KEEP** — tests behaviour that is unchanged by the refactor. No edits needed.
+- **UPDATE** — tests behaviour that is changing. Describe what needs to change and why.
+  Common cases: `OBDFile` instantiation without `strict` parameter, ingest tests that
+  assert DuckDB is created, tests that use `obd.name` as a filename key, tests that
+  use the old flat parquet metadata format.
+- **REMOVE** — tests behaviour that is being deleted (e.g. `to_duckdb_catalog` called
+  from ingest, `estimated_fuel_liters` column, `smooth_and_derive()`). Explain why.
+- **NEW** — gaps in coverage that the refactor introduces and should be tested. Examples:
+  `config-init` subcommand, `metadata-*.yaml` discovery (zero/one/many), `extract`
+  subcommand output, `ParquetMetadata` round-trip, strict vs permissive `OBDFile`,
+  GPS hash computation, legacy parquet handling in `extract`.
+
+Produce the audit as a markdown table per test file, with columns:
+`test_name | category | reason`.
+
+At the end, add a **Summary** section with counts per category and a prioritised list
+of NEW tests to write.
+
+**At the end of Phase 1.5: report the summary and stop. Wait for the user to confirm
+before starting Phase 2.**
+
+---
+
+## Phase 2 — Implement
+
+**Only begin after the user confirms Phase 1.5 is acceptable.**
+
+Implement in the order below. Each step should be commit-ready. After each step,
+execute the relevant tests from `test_audit-v0.3.md` and fix any failures before
+proceeding.
+
+The user may ask you to stop after a specific step for review — honour that request.
+
+---
+
+### Step 1 — New file: `src/drive_cycle_calculator/schema.py`
+
+Create the following, all in one file:
+
+**Enums:**
+- `FuelType(str, Enum)` — values: `petrol, diesel, e10, e85, hybrid, electric, lpg, other`
+- `VehicleCategory(str, Enum)` — values: `sedan, suv, hatchback, van, truck, motorcycle, other`
+
+**Pydantic models (provenance-grouped — see Section 4.1):**
+- `UserMetadata` — user-declared fields, all `Optional`, sourced from `metadata-*.yaml`
+- `IngestProvenance` — recorded by the ingest process (`ingest_timestamp`, `source_filename`)
+- `ComputedTripStats` — derived from raw GPS signal (`start_time`, `end_time`, GPS mean/std)
+- `ParquetMetadata` — root container composing the above three plus `schema_version`,
+  `software_version`, `parquet_id`
+
+**ProcessingConfig migration:**
+- Migrate from `@dataclass` to `pydantic.BaseModel`
+- `config_hash`: implement as a `@property` (not `@cached_property`)
+- Add `config_snapshot` property: returns `model_dump_json()` — full field values as
+  a JSON string
+
+**Helper function:**
+- `generate_yaml_template(model_class: type[BaseModel]) -> str`
+  Produces a YAML string from a Pydantic model with field `description` values as
+  inline `# comments`. For fields with enum constraints, the comment lists all valid
+  values. All fields default to `null`. Called with `UserMetadata` by `config-init`.
+
+Remove the `smooth_and_derive()` dead code from wherever it currently lives.
+
+---
+
+### Step 2 — OBDFile changes (Sections 3.1, 4.2, 7)
+
+- Add `strict: bool = True` to `__init__` and propagate through all classmethods:
+  `from_xlsx`, `from_csv`, `from_parquet`, `from_file`.
+- **Strict mode:** missing curated columns → `ValueError` naming the missing columns.
+- **Permissive mode:** missing curated columns → inject NaN columns so `curated_df`
+  always has the expected shape.
+- Add `_compute_parquet_id(self) -> str`: `sha256(lat_bytes + lon_bytes)[:6]`.
+  - In strict mode: raises `ValueError` if `Latitude`/`Longitude` columns are absent.
+  - In permissive mode: falls back to `sha256(self.name.encode())[:6]`.
+- Add `_compute_gps_stats(self) -> ComputedTripStats`: computes `start_time`,
+  `end_time`, `gps_lat_mean`, `gps_lat_std`, `gps_lon_mean`, `gps_lon_std` from raw
+  GPS columns.
+- Revise `parquet_name` property: `t<YYYYMMDD-hhmmss>-<duration_s>-<hash6>`.
+- Revise `to_parquet(path, user_metadata: UserMetadata | None = None)`:
+  Assembles a `ParquetMetadata` object from `IngestProvenance` (now),
+  `ComputedTripStats` (from `_compute_gps_stats()`), and `user_metadata` (or empty
+  `UserMetadata()` if None). Embeds `metadata.model_dump_json()` under the key
+  `"dcc_metadata"` in the PyArrow schema metadata.
+- Fix all `obd.name` call sites identified in Phase 1.
+
+---
+
+### Step 3 — `config-init` subcommand (Section 5)
+
+New file: `src/drive_cycle_calculator/cli/config_init.py`
+
+- Typer subcommand: `dcc config-init <folder>`
+- Writes `metadata-<folder_name>.yaml` into `<folder>`, where `<folder_name>` is
+  `Path(folder).name`.
+- Content: `generate_yaml_template(UserMetadata)` with `sep` and `decimal` fields
+  appended under an `# --- Ingest settings ---` comment block.
+- Errors if any `metadata-*.yaml` already exists in the folder.
+- Accepts `--force` flag to overwrite an existing file.
+
+---
+
+### Step 4 — Ingest revision (Section 6.1)
+
+Revise `src/drive_cycle_calculator/cli/ingest.py`:
+
+- **Remove** the `TripCollection.from_archive_parquets()` + `to_duckdb_catalog()` call.
+  Ingest no longer touches DuckDB.
+- Add metadata discovery: glob `<raw_dir>/metadata-*.yaml`.
+  - Zero matches → proceed with `UserMetadata()` (all fields None).
+  - Exactly one match → load, parse YAML, validate via `UserMetadata`. A
+    `ValidationError` (e.g. bad enum value) aborts with a clear error message.
+  - More than one match → abort, list the conflicting filenames.
+- `sep`/`decimal` resolution order: CLI flag > yaml value > auto-detect.
+- Pass validated `UserMetadata` into `obd.to_parquet()`.
+- Ingest is now idempotent: re-running on the same folder silently overwrites existing
+  parquets.
+
+---
+
+### Step 5 — `extract` subcommand (Section 6.2)
+
+New file: `src/drive_cycle_calculator/cli/extract.py`
+
+Typer subcommand: `dcc extract <data_dir>`
+
+**Options:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--output` | `duckdb` | Output format: `duckdb`, `csv`, `xlsx` |
+| `--out-file` | `<data_dir>/metrics.duckdb` | Output path |
+| `--window` | `4` | `ProcessingConfig.window` |
+| `--stop-threshold` | `2.0` | `ProcessingConfig.stop_threshold_kmh` |
+| `--from` | None | Filter: start date, ISO 8601 |
+| `--to` | None | Filter: end date, ISO 8601 |
+| `--lat-min/--lat-max` | None | GPS latitude bounding box (centroid) |
+| `--lon-min/--lon-max` | None | GPS longitude bounding box (centroid) |
+
+**Behaviour:**
+1. Glob all `*.parquet` files under `<data_dir>/trips/`.
+2. For each parquet, read only the PyArrow schema metadata (no column data) and
+   deserialise `"dcc_metadata"` via `ParquetMetadata.model_validate_json()`.
+   - If `"dcc_metadata"` is absent (legacy parquet): skip with a warning.
+3. Apply filters using `computed_trip_stats` and `user_metadata` fields — no array
+   scanning.
+4. For files passing the filter, load via `OBDFile.from_parquet()` → `to_trip(config)`.
+5. Assemble output rows per the schema in Section 6.2. Include `config_snapshot`
+   (JSON string) and `config_hash` columns.
+6. Write to DuckDB (`INSERT OR REPLACE` keyed on `trip_id`), CSV, or XLSX per
+   `--output`.
+
+**DuckDB table name:** `trip_metrics` (replaces the old `trip_metadata` table name to
+avoid confusion with the Pydantic model).
+
+---
+
+### Step 6 — Remaining bug fixes (Section 9)
+
+The `smooth_and_derive()` dead code should already be removed in Step 1. If any
+references remain, remove them now.
+
+- Remove `estimated_fuel_liters` column and the INSERT positional bug with it from
+  any remaining DuckDB write code.
+- Update the GUI (`src/drive_cycle_calculator/cli/gui.py`) to use `obd.parquet_name`
+  instead of `obd.name` for Parquet filenames.
+
+---
+
+### Step 7 — Wire into main CLI
+
+- Register `config_init` and `extract` subcommands in
+  `src/drive_cycle_calculator/cli/main.py`.
+- Verify `dcc analyze` still works: it reads scalar metrics columns from DuckDB, none
+  of which are removed. Update the table name reference from `trip_metadata` to
+  `trip_metrics` if hardcoded.
+
+---
+
+### Step 8 — Test suite update
+
+Using `brainstorming/refactor-proposals/test_audit-v0.3.md` as the guide:
+
+1. **REMOVE** tests: delete tests classified as REMOVE.
+2. **UPDATE** tests: apply the changes described in the audit. Do not silently make
+   tests pass by weakening assertions — if the new behaviour differs, the test must
+   assert the new behaviour explicitly.
+3. **NEW** tests: implement the new tests listed in the audit summary, following
+   existing test file conventions (fixtures, parametrize patterns, etc.).
+4. Run the full suite (`uv run pytest`) and confirm it passes. Report final counts.

@@ -2,6 +2,58 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.0] - 2026-04-19
+
+### Added
+- `schema.py` — Pydantic models for the v0.3 metadata schema:
+  `FuelType`, `VehicleCategory` (enums); `UserMetadata`, `IngestProvenance`,
+  `ComputedTripStats`, `ParquetMetadata` (provenance-grouped containers);
+  `ProcessingConfig` (migrated from `@dataclass`); `generate_yaml_template()`.
+- `ProcessingConfig.config_snapshot` — `model_dump_json()` string stored in DuckDB
+  alongside `config_hash` so past configs are recoverable without source code.
+- `OBDFile.from_file(path, strict=True, **kwargs)` — dispatches to `from_xlsx` or
+  `from_csv` by extension. Used by `dcc ingest`.
+- `OBDFile.parquet_name` property — canonical archive stem
+  `t<YYYYMMDD-hhmmss>-<duration_s>-<hash6>`. `to_trip()` sets `Trip.name` to this
+  value so DuckDB `trip_id` aligns with the Parquet filename.
+- `OBDFile.to_parquet()` now accepts `user_metadata: UserMetadata` and embeds a
+  full `ParquetMetadata` JSON blob under PyArrow key `b"dcc_metadata"`.
+- `OBDFile.get_metrics(config=None)` — convenience wrapper: `to_trip().metrics`
+  merged with spatial metadata dict.
+- Fuel unit fallback in `OBDFile.__init__`: synthesizes `Fuel flow rate/hour(l/hr)`
+  from `Fuel Rate (direct from ECU)(L/m)` (×60) or `Fuel flow rate/hour(gal/hr)`
+  (×3.78541) when the primary column is absent.
+- `OBDFile(strict=True)` parameter — strict mode (default, CLI always uses it)
+  raises `ValueError` on missing `CURATED_COLS`; permissive mode (`strict=False`)
+  injects NaN columns for library/debug use.
+- `cli/` sub-package with five fully-implemented subcommands:
+  - `dcc config-init <folder> [--force]` — writes `metadata-<folder>.yaml` template
+    from `UserMetadata` field descriptions; adds `sep`/`decimal` ingest-settings block.
+  - `dcc ingest <raw_dir> <out_dir> [--format] [--sep] [--decimal]` — discovers and
+    validates `metadata-<folder>.yaml` via Pydantic; archives raw files to
+    `<out_dir>/trips/` as v2 Parquets with embedded `ParquetMetadata`; no DuckDB.
+  - `dcc extract <data_dir> [-o duckdb|csv|xlsx] [--window] [--stop-threshold]
+    [--from DATE] [--to DATE] [--lat-min/max] [--lon-min/max]` — reads archive
+    Parquets, applies `ProcessingConfig`, writes `trip_metrics` table.
+  - `dcc analyze <data_dir>` — loads `metrics.duckdb`, prints similarity scores and
+    representative trip stats.
+  - `dcc gui` — launches the tkinter GUI.
+- `TripCollection.from_duckdb_catalog()` now auto-detects whether the DB contains
+  `trip_metrics` (new schema) or `trip_metadata` (legacy schema) and queries accordingly.
+
+### Changed
+- `ProcessingConfig` migrated from `@dataclass` to Pydantic `BaseModel` in `schema.py`.
+  `processing_config.py` is now a re-export shim (`from schema import ProcessingConfig`
+  + `DEFAULT_CONFIG`). Public API unchanged.
+- `OBDFile.to_trip()` now uses `self.parquet_name` (not `self.name`) as `Trip.name`
+  so that archive paths and DuckDB `trip_id` values are consistent.
+- DuckDB output from `dcc extract` uses table name `trip_metrics` (not `trip_metadata`)
+  and includes all `UserMetadata` fields flattened as columns.
+- Package version bumped from `0.0.2.0` → `0.1.0`.
+
+### Removed
+- `OBDFile.to_parquet_optimised()` — removed (was incomplete, hardcoded output path).
+
 ## [0.0.2.0] - 2026-04-07
 
 ### Fixed

@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from dateutil import parser as _dateutil_parser
 
+
 class GpsTimeParser:
     """Parses raw GPS time series into standardized Datetime or Duration Seconds.
     

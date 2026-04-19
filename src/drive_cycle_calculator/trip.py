@@ -58,7 +58,10 @@ class Trip:
 
     @cached_property
     def session(self) -> str:
-        """Session label, e.g. 'Morning' or 'Evening'. 'Unknown' if no '_' in name."""
+        """Session label, e.g. 'Morning' or 'Evening'. 'Unknown' if no '_' in name.
+
+        TODO: remove this property in favor of parsing session labels from metadata when creating Trip objects, rather than relying on naming conventions. See TODOS.md: 'Session labels from metadata (P1)'.
+        """
         return self.name.split("_", 1)[1] if "_" in self.name else "Unknown"
 
     # ── Metrics (computed once on first access, then cached) ─────────────────
@@ -208,5 +211,3 @@ class Trip:
 
     def __repr__(self) -> str:
         return f"Trip(name={self.name!r}, mean_speed={self.mean_speed:.1f} km/h)"
-
-

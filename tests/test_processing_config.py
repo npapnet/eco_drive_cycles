@@ -8,7 +8,6 @@ import pytest
 from drive_cycle_calculator.processing_config import (
     DEFAULT_CONFIG,
     ProcessingConfig,
-    smooth_and_derive,
 )
 
 
@@ -140,11 +139,11 @@ class TestProcessingConfigHash:
         assert all(c in "0123456789abcdef" for c in h)
 
     def test_hash_cached(self):
-        """config_hash is a cached_property — same object returned on second access."""
+        """config_hash returns the same value on repeated access."""
         config = ProcessingConfig()
         h1 = config.config_hash
         h2 = config.config_hash
-        assert h1 is h2  # identity, not just equality
+        assert h1 == h2
 
 
 class TestDefaultConfig:
@@ -158,51 +157,33 @@ class TestDefaultConfig:
         assert isinstance(DEFAULT_CONFIG, ProcessingConfig)
 
 
-# =================== LEGACY CODE =========================
+class TestProcessingConfigPydantic:
+    def test_is_pydantic_base_model(self):
+        """ProcessingConfig is a Pydantic BaseModel (migrated from @dataclass)."""
+        from pydantic import BaseModel
 
+        assert isinstance(ProcessingConfig(), BaseModel)
 
-class TestSmoothAndDerive:
-    def test_returns_expected_keys(self):
-        speed = pd.Series([10.0, 12.0, 14.0, 16.0, 18.0, 20.0, 22.0, 24.0])
-        result = smooth_and_derive(speed)
-        assert set(result.keys()) == {
-            "smooth_speed",
-            "speed_ms",
-            "acceleration",
-            "pos_acc",
-            "neg_acc",
+    def test_model_dump_returns_correct_fields(self):
+        """model_dump() returns the two config fields."""
+        assert ProcessingConfig(window=4).model_dump() == {
+            "window": 4,
+            "stop_threshold_kmh": 2.0,
         }
 
-    def test_smoothing_window_produces_nan_at_edges(self):
-        # window=4, center=True, min_periods=4
-        # rows 0-1 and 6-7 get NaN; rows 2-5 get valid means
-        speed = pd.Series([10.0, 12.0, 14.0, 16.0, 18.0, 20.0, 22.0, 24.0])
-        result = smooth_and_derive(speed)
-        assert pd.isna(result["smooth_speed"].iloc[0])
-        assert pd.isna(result["smooth_speed"].iloc[1])
-        assert result["smooth_speed"].iloc[3] == pytest.approx(15.0, abs=0.1)
+    def test_config_snapshot_is_valid_json(self):
+        """config_snapshot is a JSON string with both field names."""
+        import json
 
-    def test_speed_ms_is_smooth_divided_by_3_6(self):
-        speed = pd.Series([10.0, 12.0, 14.0, 16.0, 18.0, 20.0, 22.0, 24.0])
-        result = smooth_and_derive(speed)
-        valid = result["smooth_speed"].dropna()
-        valid_ms = result["speed_ms"].dropna()
-        assert len(valid) == len(valid_ms)
-        for s_kmh, s_ms in zip(valid, valid_ms):
-            assert s_ms == pytest.approx(s_kmh / 3.6, rel=1e-6)
+        snap = ProcessingConfig(window=4, stop_threshold_kmh=2.0).config_snapshot
+        d = json.loads(snap)
+        assert d["window"] == 4
+        assert d["stop_threshold_kmh"] == pytest.approx(2.0)
 
-    def test_acceleration_split_no_overlap(self):
-        # positive and negative acceleration must not share rows
-        speed = pd.Series([0.0, 10.0, 20.0, 15.0, 5.0, 0.0, 5.0, 10.0])
-        result = smooth_and_derive(speed)
-        pos = result["pos_acc"].dropna()
-        neg = result["neg_acc"].dropna()
-        assert pos.index.intersection(neg.index).empty
-        assert (pos > 0).all()
-        assert (neg < 0).all()
+    def test_config_snapshot_different_values_differ(self):
+        """Different field values produce different snapshots."""
+        s1 = ProcessingConfig(window=4).config_snapshot
+        s2 = ProcessingConfig(window=8).config_snapshot
+        assert s1 != s2
 
-    def test_short_series_all_nan(self):
-        # Fewer than 4 rows → all NaN smooth_speed due to min_periods=4
-        speed = pd.Series([10.0, 20.0, 15.0])
-        result = smooth_and_derive(speed)
-        assert result["smooth_speed"].isna().all()
+

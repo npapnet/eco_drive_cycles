@@ -59,7 +59,11 @@ def run_gui(
         status_var.set("Scanning for raw files…")
         try:
             raw_path = Path(raw_dir)
-            files = list(raw_path.glob("*.xlsx")) + list(raw_path.glob("*.xls")) + list(raw_path.glob("*.csv"))
+            files = (
+                list(raw_path.glob("*.xlsx"))
+                + list(raw_path.glob("*.xls"))
+                + list(raw_path.glob("*.csv"))
+            )
             
             if not files:
                 log.warning("No valid raw files found in: %s", raw_dir)
@@ -77,7 +81,7 @@ def run_gui(
                 status_var.set(f"Archiving {i}/{len(files)}: {f.name}…")
                 try:
                     obd = OBDFile.from_file(f)
-                    dest = archive_dir / f"{obd.name}.parquet"
+                    dest = archive_dir / f"{obd.parquet_name}.parquet"
                     log.info("  [%d/%d] Writing archive: %s", i, len(files), dest.name)
                     obd.to_parquet(dest)
                 except Exception as e:
