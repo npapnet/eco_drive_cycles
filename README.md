@@ -76,13 +76,23 @@ The `src/drive_cycle_calculator/` Python package implements the data pipeline:
 
 ```
 Raw OBD xlsx/csv
-  → OBDFile.from_xlsx() / from_csv()           # load + coerce
-  → OBDFile.to_parquet()                        # v2 archive (permanent)
-  → TripCollection.from_archive_parquets()      # process with ProcessingConfig
-  → TripCollection.to_duckdb_catalog()          # upsert metadata
-  → TripCollection.similarity_scores()          # 7-metric scoring
-  → TripCollection.find_representative()        # candidate representative cycle
+  → dcc config-init <folder>              # generate metadata-<folder>.yaml template
+  [user fills in metadata-<folder>.yaml]
+  → dcc ingest <raw_dir> <out_dir>        # archive to <out_dir>/trips/*.parquet
+                                          # embeds UserMetadata + GPS stats in each file
+  → dcc extract <data_dir>               # parquets → trip_metrics (DuckDB / CSV / XLSX)
+  → dcc analyze <data_dir>               # similarity scores + representative trip
 ```
+
+**CLI reference:**
+
+| Command | Description |
+|---------|-------------|
+| `dcc config-init <folder>` | Write `metadata-<folder>.yaml` template |
+| `dcc ingest <raw_dir> <out_dir>` | Raw xlsx/csv → v2 archive Parquets (no DuckDB) |
+| `dcc extract <data_dir>` | Archive Parquets → `trip_metrics` DuckDB/CSV/XLSX |
+| `dcc analyze <data_dir>` | Similarity analysis from `metrics.duckdb` |
+| `dcc gui` | Launch the tkinter GUI |
 
 See `CLAUDE.md` for developer guidance, `TODOS.md` for the backlog, and
 `docs/designs/obd-file-processing-config.md` for the full pipeline design.

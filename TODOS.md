@@ -1,13 +1,5 @@
 # TODOS
 
-## P1 — Clean up remaining legacy code
-
-**What:** Several legacy items remain in the codebase that should be removed:
-
-1. **`OBDFile.to_parquet_optimised()`** — incomplete: hardcoded output filename `"gps_time_parsed_opt.parquet"` instead of the `path` argument. Either fix properly or remove.
-
-
----
 
 ## P1 — Microtrip segmentation
 
@@ -71,15 +63,6 @@
 
 ---
 
-## P2 — CLI entry point
-
-**What:** `dcc analyze ./data/ --output report.xlsx` — a command-line interface for the drive cycle calculator package.
-
-**Why:** Researchers outside the GUI workflow need a scriptable interface.
-
-**Effort:** S (human: ~4 hrs / CC: ~10 min)
-
----
 
 ## P2 — Fix stop_percentage unit-detection heuristic (DriveGUI only)
 
@@ -130,7 +113,35 @@
 **Depends on:** Parquet + DuckDB persistence layer ✓.
 
 
-# DONE 
+# DONE
+
+## ~~P2 — CLI entry point~~ ✓ DONE
+
+All five subcommands shipped as part of the v0.3 refactor (package v0.1.0):
+`dcc config-init`, `dcc ingest`, `dcc extract`, `dcc analyze`, `dcc gui`.
+`dcc extract` goes beyond the original spec — supports `--output duckdb|csv|xlsx`,
+date filters, and GPS centroid filters.
+
+---
+
+## ~~P1 — Clean up remaining legacy code (to_parquet_optimised)~~ ✓ DONE
+
+`OBDFile.to_parquet_optimised()` removed. `OBDFile.to_parquet(path, user_metadata)`
+is the canonical path and now embeds `ParquetMetadata` JSON.
+
+---
+
+## ~~v0.3 refactor~~ ✓ DONE
+
+**Shipped in package v0.1.0 (2026-04-19):**
+- `schema.py` — Pydantic metadata models (`UserMetadata`, `IngestProvenance`,
+  `ComputedTripStats`, `ParquetMetadata`) + `ProcessingConfig` (migrated from `@dataclass`).
+- `OBDFile` updated: `from_file()`, `parquet_name`, `strict` mode, fuel unit fallback,
+  `to_parquet(user_metadata)` embeds `ParquetMetadata` JSON.
+- `processing_config.py` is now a re-export shim.
+- Full CLI: `config-init`, `ingest`, `extract`, `analyze`, `gui`.
+
+---
 
 ## ~~P1 — OBDFile + ProcessingConfig refactor~~ ✓ DONE
 
