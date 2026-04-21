@@ -9,10 +9,10 @@ app = typer.Typer(help="Write a metadata-<folder>.yaml template for a raw OBD fo
 _INGEST_SETTINGS_BLOCK = """\
 # --- Ingest settings ---
 # CSV field delimiter. Leave as null for auto-detection.
-sep: null
+sep: ","
 
 # CSV decimal separator. Leave as null for auto-detection.
-decimal: null
+decimal: "."
 """
 
 
