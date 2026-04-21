@@ -31,6 +31,7 @@ pq_files = list(DATADIR.glob("*.parquet"))
 # FNAME = pq_files[0]
 # this is the longest trip in the dataset, and has a lot of data points
 FNAME = pq_files[41]
+FNAME = DATADIR/"t20250816-093151-1384-4a483a.parquet"
 print(f"Reading metadata from: {FNAME}")
 # %%
 obd = OBDFile.from_parquet(FNAME)
@@ -44,7 +45,7 @@ import pandas as pd
 import geopandas as gpd
 import plotnine as p9
 
-def plot_trip_path(df: pd.DataFrame, xlims:list = (19, 29), ylims:list=(34, 42), sigma_multiplier: float = 6.0, force_download:bool = False) -> ggplot:
+def plot_trip_path(df: pd.DataFrame, xlims:list = (19, 29), ylims:list=(34, 42), sigma_multiplier: float = 6.0, force_download:bool = False) -> p9.ggplot:
     """ 
 
     Args:
@@ -84,7 +85,7 @@ def plot_trip_path(df: pd.DataFrame, xlims:list = (19, 29), ylims:list=(34, 42),
     return p
 
 plot_trip_path(df = obd._df.loc[:,["Longitude", "Latitude"]]
-               , xlims=(23.5, 26.5), ylims=(34.5, 36.0))
+               , xlims=(23.5, 26.5), ylims=(39, 41.0))
 #%%
 obd._df.columns
 # %%

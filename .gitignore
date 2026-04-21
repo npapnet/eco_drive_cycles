@@ -49,3 +49,4 @@ students/DriveGUI/log/
 raw_data/**/log/
 data/
 /_data/complete_extract.7z
+/examples/scripts/vis_vicinity_bokeh.html
