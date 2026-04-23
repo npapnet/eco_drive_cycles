@@ -33,7 +33,9 @@ Stop duration is tracked via `stop_duration_after` as a derived property (see §
 
 ### 2.3 Trip
 
-A `Trip` owns the parent DataFrame and acts as the container from which microtrips are derived. Trip identity criteria are deferred pending usage context. Working assumption: one ignition session = one Trip.
+A `Trip` owns the parent DataFrame and acts as the container from which microtrips are derived. Trip identity criteria are deferred pending usage context. The current Working assumption and implementation: one ignition session = one Trip.
+
+Trip is currently derived from OBDII logs with a stable filename. This is a pragmatic choice given current data sources but may need revision if we ingest more complex datasets (e.g., multi-trip day logs, non-ignition-bounded data).
 
 ---
 
@@ -243,8 +245,7 @@ All `SegmentationConfig` and `ProcessingConfig` field values are serialised into
 | Item | Status | Notes |
 |---|---|---|
 | Trip identity criteria | Deferred | Working assumption: ignition-bounded. Requires RPM or ignition signal — not currently in all OBDII logs. |
-| Cold-start annotations | Deferred | Requires ignition state or RPM proxy. Flag as known limitation. |
-| WLTP class assignment | Out of scope | Downstream of this module. |
+| Cold-start annotations | Deferred | Requires ignition state or RPM proxy. Flag as known limitation. Add to TODOS.md |
 | Metric definitions | Out of scope | Not part of this spec. |
 | `PipelineConfig` versioning | Deferred | Relevant when filtering or additional components are added. |
 

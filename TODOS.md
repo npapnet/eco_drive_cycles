@@ -3,6 +3,8 @@
 
 ## P1 — Microtrip segmentation
 
+spec: docs/designs/active/microtrip_design_spec.md
+
 **What:** `Trip.microtrips` returns actual `list[Microtrip]` instead of raising `NotImplementedError`.
 
 **Why:** Microtrips are the fundamental unit of analysis for WLTP-style driving-cycle construction. The current session-level similarity scoring is a stepping stone. Scientific goal: find the ensemble of microtrips whose collective statistics best match the overall distribution, then assemble the candidate cycle from them.
