@@ -444,6 +444,7 @@ class OBDFile:
             df=processed_df,
             name=self.parquet_name,
             stop_threshold_kmh=config.stop_threshold_kmh,
+            parquet_id=self._compute_parquet_id(),
         )
 
     # end region

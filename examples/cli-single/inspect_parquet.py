@@ -49,6 +49,30 @@ obd = OBDFile.from_parquet(path)
 
 df = obd.full_df
 # %%
+df.columns
+# %%
+import pandas as pd
+import matplotlib.pyplot as plt
+import plotnine as p9
+
+# plot accelerations vs elapsed time
+df["elapsed_s"] = (df["GPS Time"] - df["GPS Time"][0]).dt.total_seconds()
+
+p1 = (
+    p9.ggplot(df)
+    # + p9.geom_line(p9.aes(x="elapsed_s", y="G(x)"), color="blue")
+    # + p9.geom_line(p9.aes(x="elapsed_s", y="G(calibrated)"), color="green")
+    # + p9.geom_line(p9.aes(x="elapsed_s", y="G(y)"))
+    + p9.geom_line(p9.aes(x="elapsed_s", y="Acceleration Sensor(X axis)(g)"), color="red")
+    + p9.geom_line(p9.aes(x="elapsed_s", y="Acceleration Sensor(Y axis)(g)"), color="blue")
+    + p9.geom_line(p9.aes(x="elapsed_s", y="Acceleration Sensor(Total)(g)"), color="green")
+    + p9.theme_bw()
+    + p9.labs(title="Acceleration vs Elapsed Time", x="Elapsed Time (s)", y="Acceleration (g)")
+)
+
+p1.draw()
+
+# %%
 obd.curated_df.columns
 # %% Generate Trip from OBDFile
 trip = obd.to_trip()

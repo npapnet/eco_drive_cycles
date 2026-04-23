@@ -39,11 +39,12 @@ Run `uv sync` from the root to install all dependencies.
 
 See `TODOS.md` for the full backlog. Current top items:
 
-1. **v0.3 refactor** — see `docs/designs/refactor_v0.3.md` for the full design doc.
-   Key changes: metadata schema (Pydantic), ingest/extract decoupling, canonical trip
-   identity, `OBDFile` strictness. This is the active sprint.
-2. **Microtrip segmentation** (`Trip.microtrips`) — core unit for WLTP-style cycle construction.
-3. **Representative microtrip selection** and **candidate cycle assembly** — downstream of segmentation.
+1. **Representative microtrip selection** (`TripCollection.find_representative_microtrip()`) —
+   next step after microtrip segmentation (shipped 2026-04-23).
+2. **Candidate cycle assembly** — assemble a synthetic drive cycle from representative
+   microtrips. Downstream of representative selection.
+3. **First-batch data quality audit** (P2) — run migration against `raw_data/` and document
+   per-driver issues; define minimum column spec for future acquisition sessions.
 
 When suggesting or making changes: does it belong in `src/drive_cycle_calculator/`
 (calculation) or `examples/` (thin wrapper)? Never add business logic to `students/DriveGUI/`.
@@ -54,7 +55,7 @@ When suggesting or making changes: does it belong in `src/drive_cycle_calculator
 
 The active calculation layer. All business logic lives here.
 
-**Target pipeline (post v0.3 refactor):**
+**Target pipeline:**
 
 ```
 Raw .xlsx / .csv (OBD-II)
@@ -69,6 +70,10 @@ Archive Parquet (self-contained: raw data + ParquetMetadata)
 
 DuckDB (trip_metrics table)
   → dcc analyze <data_dir>               # similarity scores, representative trip
+
+Trip (in-memory, produced by OBDFile.to_trip() or TripCollection loaders)
+  → trip.segment(SegmentationConfig)     # detect_boundaries() → build_microtrips()
+  → list[Microtrip]                      # motion segments for cycle construction
 ```
 
 **File structure:**
@@ -78,10 +83,13 @@ src/drive_cycle_calculator/
 ├── _schema.py               — OBD_COLUMN_MAP, CURATED_COLS
 ├── schema.py                — Pydantic models (NEW in v0.3): FuelType, VehicleCategory,
 │                              UserMetadata, IngestProvenance, ComputedTripStats,
-│                              ParquetMetadata, ProcessingConfig (migrated from dataclass)
+│                              ParquetMetadata, ProcessingConfig (migrated from dataclass),
+│                              SegmentationConfig
 ├── gps_time_parser.py       — GpsTimeParser
 ├── obd_file.py              — OBDFile
 ├── processing_config.py     — DEFAULT_CONFIG (ProcessingConfig class moved to schema.py)
+├── microtrip.py             — Microtrip (Pydantic model, weakref data access)
+├── segmentation.py          — SegmentBoundary, detect_boundaries(), build_microtrips()
 ├── trip.py                  — Trip
 └── trip_collection.py       — TripCollection, similarity(), _SEVEN_METRIC_KEYS
 ```
@@ -100,9 +108,21 @@ src/drive_cycle_calculator/
   `config_snapshot` property: `model_dump_json()` — full field values as JSON string.
   Stored in DuckDB `trip_metrics` table alongside computed metrics.
 
-- **`Trip(df, name, stop_threshold_kmh)`** — one processed session. `@cached_property`
-  metrics: `mean_speed`, `mean_acceleration`, `mean_deceleration`, `stop_pct`,
-  `stop_count`, `duration`, `mean_speed_no_stops`, `max_speed`.
+- **`SegmentationConfig(stop_threshold_kmh=2.0, stop_min_duration_s=1.0, microtrip_min_duration_s=15.0, microtrip_min_distance_m=50.0)`** — Pydantic `BaseModel` in `schema.py`.
+  Passed to `Trip.segment()` at call time; not stored on the Trip.
+
+- **`Microtrip`** — one motion segment derived from a parent `Trip`. Fields: `trip_file`
+  (`Path`), `parquet_id` (str), `start_idx`, `end_idx`, `stop_start_idx`, `stop_end_idx`
+  (all iloc positions). Private `_trip_ref: weakref.ref` bound via `bind(trip)`.
+  Properties: `samples` (motion DataFrame slice), `stop_samples` (trailing-stop slice),
+  `stop_duration_after` (float seconds). Data access raises `RuntimeError` if Trip is GC'd
+  (D1: no parquet reload fallback). See `docs/designs/archive/microtrip_design_spec.md`.
+
+- **`Trip(df, name, stop_threshold_kmh, parquet_id="")`** — one processed session.
+  `@cached_property` metrics: `mean_speed`, `mean_acceleration`, `mean_deceleration`,
+  `stop_pct`, `stop_count`, `duration`, `mean_speed_no_stops`, `max_speed`.
+  Properties: `data` (public DataFrame alias), `file` (Path or None).
+  `segment(config: SegmentationConfig) → list[Microtrip]` — two-stage segmentation.
 
 - **`TripCollection`** — groups multiple trips. Constructors: `from_folder`,
   `from_archive_parquets`. Methods: `similarity_scores`, `find_representative`.
@@ -203,8 +223,10 @@ in `_schema.OBD_COLUMN_MAP` via `ProcessingConfig.apply()`.
 
 ## Key Documentation
 
-- `docs/designs/refactor_v0.3.md` — **ACTIVE**: authoritative design doc for the
-  current v0.3 sprint. Treat this as ground truth for the refactor.
+- `docs/designs/archive/refactor_v0.3.md` — v0.3 design doc (shipped). Authoritative
+  reference for the metadata schema, ingest/extract pipeline, and OBDFile strictness.
+- `docs/designs/archive/microtrip_design_spec.md` — microtrip segmentation spec (shipped
+  2026-04-23). Two-stage design, Microtrip model, SegmentationConfig. Reference for maintenance.
 - `brainstorming/refactor-proposals/clarification-v0.3.md` — codebase audit report
   produced before the v0.3 refactor; documents the pre-refactor architecture and
   known inconsistencies. Useful context but describes the old state.

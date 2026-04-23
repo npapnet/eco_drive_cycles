@@ -14,7 +14,7 @@ from enum import Enum
 from typing import Optional, Union, get_args, get_origin
 
 import pandas as pd
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # ── Enums ────────────────────────────────────────────────────────────────────
@@ -184,6 +184,35 @@ class ProcessingConfig(BaseModel):
                 "fuel_flow_lph": pd.to_numeric(passthrough["fuel_flow_lph"], errors="coerce"),
             }
         )
+
+
+# ── SegmentationConfig ────────────────────────────────────────────────────────
+
+
+class SegmentationConfig(BaseModel):
+    """Parameters for microtrip segmentation.
+
+    Independent of ProcessingConfig — smoothing and segmentation are separate
+    pipeline stages with separate sensitivity profiles.
+
+    See microtrip_design_spec.md §3.2.
+    """
+
+    stop_threshold_kmh: float = 2.0
+    stop_min_duration_s: float = 1.0
+    microtrip_min_duration_s: float = 15.0
+    microtrip_min_distance_m: float = 50.0
+
+    @field_validator("microtrip_min_duration_s")
+    @classmethod
+    def _min_above_floor(cls, v: float) -> float:
+        """Enforce the 5 s hard floor derived from sensor noise literature.
+
+        See microtrip_design_spec.md §3.2.
+        """
+        if v < 5.0:
+            raise ValueError("microtrip_min_duration_s cannot be below the 5 s floor")
+        return v
 
 
 # ── YAML template generator ───────────────────────────────────────────────────

@@ -13,6 +13,9 @@ from pathlib import Path
 
 import pandas as pd
 
+from drive_cycle_calculator.microtrip import Microtrip
+from drive_cycle_calculator.schema import SegmentationConfig
+
 
 class Trip:
     """One recorded driving session.
@@ -30,10 +33,12 @@ class Trip:
         df: pd.DataFrame | None = None,
         name: str = "",
         stop_threshold_kmh: float = 2.0,
+        parquet_id: str = "",
     ) -> None:
         self.__df = df
         self.name = name
         self.stop_threshold_kmh = stop_threshold_kmh
+        self.parquet_id = parquet_id
         self._path: Path | None = None  # set by from_duckdb_catalog() for lazy loading
 
     @property
@@ -161,6 +166,30 @@ class Trip:
         """Mean negative deceleration (braking) in m/s²."""
         return self.metrics["mean_dec"]
 
+    # ── Public DataFrame accessors ────────────────────────────────────────────
+    #
+    # Microtrip._resolve_data() calls trip.data; trip.file is the parquet key.
+    # These are thin public aliases over the private lazy-load mechanism.
+
+    @property
+    def data(self) -> pd.DataFrame:
+        """The processed DataFrame for this trip.
+
+        Public alias for the internal lazy-load accessor. Required by
+        Microtrip._resolve_data().
+
+        See microtrip_design_spec.md §4.2.
+        """
+        return self._df
+
+    @property
+    def file(self) -> Path | None:
+        """Path to the archive Parquet backing this trip, or None if in-memory only.
+
+        See microtrip_design_spec.md §4.2.
+        """
+        return self._path
+
     # ── Speed profile (accesses full DataFrame) ───────────────────────────────
 
     @cached_property
@@ -195,17 +224,56 @@ class Trip:
             return float("nan")
         return float(pd.to_numeric(self._df["smooth_speed_kmh"], errors="coerce").max())
 
-    # ── Future stubs ──────────────────────────────────────────────────────────
+    # ── Segmentation ──────────────────────────────────────────────────────────
 
     @property
-    def microtrips(self) -> list:
+    def microtrips(self) -> list[Microtrip]:
         """Microtrip segmentation — not yet implemented.
 
-        See TODOS.md: 'Microtrip segmentation (P1)'.
+        Deprecated stub. Use Trip.segment(config) instead.
+
+        See microtrip_design_spec.md §4.2, TODOS.md: 'Microtrip segmentation (P1)'.
         """
         raise NotImplementedError(
-            "Microtrip segmentation is planned for a future release. See TODOS.md for tracking."
+            "Use Trip.segment(config) to obtain microtrips. "
+            "See microtrip_design_spec.md §5 and TODOS.md for tracking."
         )
+
+    def segment(self, config: SegmentationConfig) -> list[Microtrip]:
+        """Segment this trip into microtrips using the given segmentation config.
+
+        Delegates to detect_boundaries() then build_microtrips(). Each returned
+        Microtrip has its weakref bound to this Trip instance.
+
+        Parameters
+        ----------
+        config : SegmentationConfig
+            Segmentation parameters: stop threshold, minimum durations,
+            minimum distance.
+
+        Returns
+        -------
+        list[Microtrip]
+            Ordered list of microtrips. Empty list if no valid segments are
+            found (e.g. trip is entirely stopped, or all segments are below
+            the minimum duration/distance filters).
+
+        See microtrip_design_spec.md §5 (two-stage design).
+        """
+        from drive_cycle_calculator.segmentation import build_microtrips, detect_boundaries
+
+        data = self.data
+        if "smooth_speed_kmh" not in data.columns:
+            return []
+
+        # reset_index guarantees 0-based positions that match iloc in build_microtrips.
+        speed = (
+            pd.to_numeric(data["smooth_speed_kmh"], errors="coerce")
+            .fillna(0.0)
+            .reset_index(drop=True)
+        )
+        boundaries = detect_boundaries(speed, config)
+        return build_microtrips(self, boundaries, config)
 
     # ── Dunder ────────────────────────────────────────────────────────────────
 

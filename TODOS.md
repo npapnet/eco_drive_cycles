@@ -1,25 +1,11 @@
 # TODOS
 
+## P1 - Simplify Trip Dataframe Creation in Tests
 
-## P1 — Microtrip segmentation
+**What:**: consider using a conftest.py fixture that generates a simple, valid Trip DataFrame for testing purposes. This would eliminate the need for manually constructing DataFrames in each test case, reducing boilerplate and improving readability. 
 
-spec: docs/designs/active/microtrip_design_spec.md
+**Why:** Many tests currently construct Trip DataFrames from scratch, which can be verbose and error-prone. A fixture would centralize this logic, making it easier to maintain and update the test data structure as needed.
 
-**What:** `Trip.microtrips` returns actual `list[Microtrip]` instead of raising `NotImplementedError`.
-
-**Why:** Microtrips are the fundamental unit of analysis for WLTP-style driving-cycle construction. The current session-level similarity scoring is a stepping stone. Scientific goal: find the ensemble of microtrips whose collective statistics best match the overall distribution, then assemble the candidate cycle from them.
-
-**Algorithm:**
-1. Identify stop intervals (speed ≤ `stop_threshold_kmh` for ≥ N consecutive samples)
-2. Split the speed profile at those intervals
-3. Each contiguous moving segment = one Microtrip
-4. Compute per-microtrip metrics: duration, mean_speed, mean_acc, mean_dec, stop_pct
-
-**Effort:** M (human: ~1 day / CC: ~20 min)
-
-**Depends on:** `Trip` class shipped ✓. Implement `Microtrip` dataclass first.
-
----
 
 ## P1 — Representative microtrip selection
 
@@ -27,7 +13,7 @@ spec: docs/designs/active/microtrip_design_spec.md
 
 **Effort:** S (human: ~4 hrs / CC: ~10 min)
 
-**Depends on:** Microtrip segmentation (P1) must land first.
+**Depends on:** Microtrip segmentation ✓ landed (2026-04-23, branch `feature/microtrips`).
 
 ---
 
@@ -116,6 +102,19 @@ spec: docs/designs/active/microtrip_design_spec.md
 
 
 # DONE
+
+## ~~P1 — Microtrip segmentation~~ ✓ DONE (2026-04-23, branch `feature/microtrips`)
+
+**Shipped:**
+- `schema.py` — `SegmentationConfig` Pydantic model (stop/duration/distance thresholds).
+- `microtrip.py` — `Microtrip` Pydantic model with weakref data access (D1: no parquet reload fallback).
+- `segmentation.py` — `SegmentBoundary` dataclass, `detect_boundaries()`, `build_microtrips()`.
+- `trip.py` — `parquet_id` param, `data`/`file` public properties, `segment(config)` method.
+- `obd_file.py` — `to_trip()` now passes `parquet_id`.
+- `tests/test_segmentation.py` — 38 tests covering boundary detection, object construction, filtering, data access, and degenerate inputs.
+- Spec archived at `docs/designs/archive/microtrip_design_spec.md`.
+
+---
 
 ## ~~P2 — CLI entry point~~ ✓ DONE
 

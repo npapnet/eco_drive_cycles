@@ -2,6 +2,41 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.0] - 2026-04-23
+
+### Added
+- `schema.py` — `SegmentationConfig` Pydantic model: `stop_threshold_kmh` (2.0),
+  `stop_min_duration_s` (1.0), `microtrip_min_duration_s` (15.0),
+  `microtrip_min_distance_m` (50.0). Validator enforces `microtrip_min_duration_s ≥ 5.0`.
+- `microtrip.py` — `Microtrip` Pydantic model. Fields: `trip_file` (Path),
+  `parquet_id` (str), `start_idx`, `end_idx`, `stop_start_idx`, `stop_end_idx`
+  (all iloc positions). Properties: `samples`, `stop_samples`, `stop_duration_after`.
+  Data access via weakref; raises `RuntimeError` if parent Trip is GC'd (no parquet
+  reload fallback by design — see D1 in microtrip_design_spec).
+- `segmentation.py` — two-stage segmentation: `detect_boundaries(speed, config)`
+  (Stage 1, Trip-independent; operates on speed array only) and
+  `build_microtrips(trip, boundaries, config)` (Stage 2, applies duration and
+  distance filters, binds each `Microtrip` to the parent `Trip` via weakref).
+  `SegmentBoundary` dataclass carries iloc bounds between stages.
+- `Trip.segment(config: SegmentationConfig) → list[Microtrip]` — top-level entry
+  point. Returns `[]` for degenerate input (missing `smooth_speed_kmh`, all-stopped
+  signal, all segments below threshold filters).
+- `Trip.data` / `Trip.file` — public aliases for the internal lazy-load DataFrame
+  and backing Parquet path. Required by `Microtrip._resolve_data()`.
+- `Trip.__init__` — new `parquet_id: str = ""` parameter (canonical DuckDB foreign
+  key, forwarded from `OBDFile.to_trip()`). Backward-compatible default.
+- 38 new tests in `tests/test_segmentation.py`: boundary detection, object
+  construction, duration/distance filtering, weakref GC behaviour, degenerate inputs.
+
+### Changed
+- `OBDFile.to_trip()` now forwards `parquet_id` to `Trip.__init__` so the canonical
+  DuckDB key is available on in-memory Trip objects.
+- `Trip.microtrips` property message updated to direct callers to `Trip.segment(config)`.
+- Design specs reorganised: `docs/designs/active/` → `docs/designs/archive/`
+  (both `refactor_v0.3.md` and `microtrip_design_spec.md` archived).
+
+---
+
 ## [0.1.0] - 2026-04-19
 
 ### Added
