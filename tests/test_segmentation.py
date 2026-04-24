@@ -23,7 +23,6 @@ from drive_cycle_calculator.segmentation import (
 )
 from drive_cycle_calculator.trip import Trip
 
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 

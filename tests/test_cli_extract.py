@@ -2,16 +2,12 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
-import pytest
 from typer.testing import CliRunner
 
 from drive_cycle_calculator.cli.main import app
-from drive_cycle_calculator.obd_file import OBDFile
 
 runner = CliRunner()
 
@@ -27,31 +23,12 @@ _EXPECTED_COLS = {
 }
 
 
-def _make_archive_parquet(path: Path, speed_kmh: float = 30.0, n: int = 10) -> None:
-    """Write a v2 archive Parquet with embedded dcc_metadata."""
-    timestamps = [f"Mon Sep 22 10:30:{i:02d} +0300 2019" for i in range(n)]
-    df = pd.DataFrame(
-        {
-            "GPS Time": timestamps,
-            "Speed (OBD)(km/h)": [speed_kmh] * n,
-            "CO\u2082 in g/km (Average)(g/km)": [120.0] * n,
-            "Engine Load(%)": [50.0] * n,
-            "Fuel flow rate/hour(l/hr)": [2.0] * n,
-            "Longitude": [24.0] * n,
-            "Latitude": [60.0] * n,
-        }
-    )
-    OBDFile(df, path.stem).to_parquet(path)
-
-
 class TestCliExtract:
-    def test_produces_metrics_duckdb(self, tmp_path):
+    def test_produces_metrics_duckdb(self, tmp_path, archive_parquet):
         """extract creates metrics.duckdb with a trip_metrics table."""
         import duckdb
 
-        trips = tmp_path / "trips"
-        trips.mkdir()
-        _make_archive_parquet(trips / "trip_a.parquet")
+        archive_parquet(tmp_path / "trips" / "trip_a.parquet")
         result = runner.invoke(app, ["extract", str(tmp_path)])
         assert result.exit_code == 0
         db_path = tmp_path / "metrics.duckdb"
@@ -60,13 +37,11 @@ class TestCliExtract:
             count = conn.execute("SELECT COUNT(*) FROM trip_metrics").fetchone()[0]
         assert count == 1
 
-    def test_output_schema_completeness(self, tmp_path):
+    def test_output_schema_completeness(self, tmp_path, archive_parquet):
         """trip_metrics table has all expected columns with non-null trip_id."""
         import duckdb
 
-        trips = tmp_path / "trips"
-        trips.mkdir()
-        _make_archive_parquet(trips / "trip_a.parquet", speed_kmh=36.0)
+        archive_parquet(tmp_path / "trips" / "trip_a.parquet", speed_kmh=36.0)
         runner.invoke(app, ["extract", str(tmp_path)])
         db_path = tmp_path / "metrics.duckdb"
         with duckdb.connect(str(db_path), read_only=True) as conn:

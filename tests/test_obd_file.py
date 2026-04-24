@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import pyarrow.parquet as pq
 import pytest
+from conftest import make_raw_obd_df
 
 from drive_cycle_calculator._schema import CURATED_COLS
 from drive_cycle_calculator.obd_file import OBDFile
@@ -16,21 +17,10 @@ from drive_cycle_calculator.obd_file import OBDFile
 
 
 def _make_raw_df(n: int = 10, speed_kmh: float = 30.0) -> pd.DataFrame:
-    """Minimal raw OBD DataFrame (all CURATED_COLS, uniform GPS timestamps)."""
-    timestamps = [f"Mon Sep 22 10:30:{i:02d} +0300 2019" for i in range(n)]
-    return pd.DataFrame(
-        {
-            "GPS Time": timestamps,
-            "Speed (OBD)(km/h)": [speed_kmh] * n,
-            "CO\u2082 in g/km (Average)(g/km)": [120.0] * n,
-            "Engine Load(%)": [50.0] * n,
-            "Fuel flow rate/hour(l/hr)": [2.0] * n,
-            "Extra Column": ["x"] * n,  # should be preserved in archive
-            "Longitude": [24.0] * n,
-            "Latitude": [60.0] * n,
-            "Altitude": [100.0] * n,
-        }
-    )
+    """Minimal raw OBD DataFrame with all CURATED_COLS plus Extra Column."""
+    df = make_raw_obd_df(n=n, speed_kmh=speed_kmh)
+    df["Extra Column"] = ["x"] * n  # should be preserved in archive
+    return df
 
 
 def _write_xlsx(path: Path, df: pd.DataFrame) -> None:
@@ -50,13 +40,6 @@ def _write_csv(
         out[col] = out[col].apply(lambda v: f"{v:.2f}".replace(".", decimal))
     out.to_csv(path, sep=sep, index=False)
 
-
-def _write_archive_parquet(path: Path, df: pd.DataFrame | None = None) -> None:
-    """Write a v2 archive Parquet via OBDFile."""
-    if df is None:
-        df = _make_raw_df()
-    obd = OBDFile(df, path.stem)
-    obd.to_parquet(path)
 
 
 # ── from_xlsx ─────────────────────────────────────────────────────────────────
@@ -177,10 +160,9 @@ class TestFromCsv:
 
 
 class TestFromParquet:
-    def test_v2_loads_ok(self, tmp_path):
+    def test_v2_loads_ok(self, archive_parquet):
         """v2 archive Parquet (no smooth_speed_kmh column) loads without error."""
-        p = tmp_path / "trip.parquet"
-        _write_archive_parquet(p)
+        p = archive_parquet("trip.parquet")
         obd = OBDFile.from_parquet(p)
         assert "GPS Time" in obd._df.columns
 
@@ -197,9 +179,8 @@ class TestFromParquet:
         with pytest.raises(FileNotFoundError):
             OBDFile.from_parquet(tmp_path / "nonexistent.parquet")
 
-    def test_name_from_stem(self, tmp_path):
-        p = tmp_path / "archive_trip_01.parquet"
-        _write_archive_parquet(p)
+    def test_name_from_stem(self, archive_parquet):
+        p = archive_parquet("archive_trip_01.parquet")
         obd = OBDFile.from_parquet(p)
         assert obd.name == "archive_trip_01"
 

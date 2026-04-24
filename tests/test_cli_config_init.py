@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
 from typer.testing import CliRunner
 
 from drive_cycle_calculator.cli.main import app
