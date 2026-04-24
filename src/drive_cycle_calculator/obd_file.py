@@ -18,14 +18,15 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from drive_cycle_calculator._schema import CURATED_COLS
 from drive_cycle_calculator.gps_time_parser import GpsTimeParser
+from drive_cycle_calculator.schema import CURATED_COLS
 
 logger = logging.getLogger(__name__)
 
 
 if TYPE_CHECKING:
-    from drive_cycle_calculator.schema import ProcessingConfig, UserMetadata
+    from drive_cycle_calculator.processing_config import ProcessingConfig
+    from drive_cycle_calculator.schema import UserMetadata
     from drive_cycle_calculator.trip import Trip
 
 # Parquet format version written to PyArrow schema metadata.

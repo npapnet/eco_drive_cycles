@@ -1,20 +1,39 @@
 # schema.py
 # ---------
-# Pydantic models for the v0.3 metadata schema, and ProcessingConfig (migrated
-# from @dataclass).  All business logic for OBD processing also lives here so
-# that downstream code only needs one import for both schema and computation.
+# OBD column constants and Pydantic metadata models for the v0.3 schema.
+# ProcessingConfig lives in processing_config.py.
 
 from __future__ import annotations
 
-import dataclasses
-import hashlib
-import json
 from datetime import datetime
 from enum import Enum
-from typing import Optional, Union, get_args, get_origin
+from typing import Optional
 
-import pandas as pd
 from pydantic import BaseModel, Field, field_validator
+
+
+# ── OBD column constants ──────────────────────────────────────────────────────
+
+# Maps raw OBD column names (as exported by Torque) to short English names
+# used in the processed DataFrame produced by ProcessingConfig.apply().
+# Note: "GPS Time" is NOT here — it is consumed to produce elapsed_s, not renamed.
+OBD_COLUMN_MAP: dict[str, str] = {
+    "Speed (OBD)(km/h)": "speed_kmh",
+    "CO₂ in g/km (Average)(g/km)": "co2_g_per_km",
+    "Engine Load(%)": "engine_load_pct",
+    "Fuel flow rate/hour(l/hr)": "fuel_flow_lph",
+}
+
+# The minimum set of OBD columns required for analysis.
+# OBDFile.curated_df returns only these columns.
+# OBDFile.to_trip() raises ValueError if any are absent.
+CURATED_COLS: list[str] = [
+    "GPS Time",
+    "Speed (OBD)(km/h)",
+    "CO₂ in g/km (Average)(g/km)",
+    "Engine Load(%)",
+    "Fuel flow rate/hour(l/hr)",
+]
 
 
 # ── Enums ────────────────────────────────────────────────────────────────────
@@ -90,100 +109,6 @@ class ParquetMetadata(BaseModel):
     ingest_provenance: IngestProvenance
     computed_trip_stats: ComputedTripStats
     user_metadata: UserMetadata
-
-
-# ── ProcessingConfig (migrated from @dataclass) ───────────────────────────────
-
-
-class ProcessingConfig(BaseModel):
-    """Parameters for the OBD data processing pipeline.
-
-    Attributes
-    ----------
-    window : int
-        Rolling window size for speed smoothing (samples). Default 4.
-    stop_threshold_kmh : float
-        Speed below which a sample is classified as stopped (km/h).
-    """
-
-    window: int = 4
-    stop_threshold_kmh: float = 2.0
-
-    @property
-    def config_hash(self) -> str:
-        """First 8 characters of the md5 of the sorted JSON of config fields.
-
-        Deterministic across instances with identical field values.
-        Stored in the DuckDB catalog for reproducibility auditing.
-        """
-        payload = json.dumps(self.model_dump(), sort_keys=True)
-        return hashlib.md5(payload.encode()).hexdigest()[:8]
-
-    @property
-    def config_snapshot(self) -> str:
-        """Full field values as a compact JSON string.
-
-        Suitable for storing in DuckDB so past configs are recoverable
-        without access to the source code.
-        """
-        return self.model_dump_json()
-
-    def apply(self, curated_df: pd.DataFrame) -> pd.DataFrame:
-        """Transform a curated OBD DataFrame into a processed DataFrame.
-
-        Parameters
-        ----------
-        curated_df : pd.DataFrame
-            DataFrame with raw OBD column names (CURATED_COLS subset).
-            Produced by ``OBDFile.curated_df``.
-
-        Returns
-        -------
-        pd.DataFrame
-            Processed DataFrame with columns:
-            elapsed_s, smooth_speed_kmh, acc_ms2, speed_kmh,
-            co2_g_per_km, engine_load_pct, fuel_flow_lph.
-
-        Raises
-        ------
-        ValueError
-            If any column required by this pipeline is absent from *curated_df*.
-        """
-        from drive_cycle_calculator._schema import CURATED_COLS, OBD_COLUMN_MAP
-
-        missing = [c for c in CURATED_COLS if c not in curated_df.columns]
-        if missing:
-            raise ValueError(
-                f"ProcessingConfig.apply() received a DataFrame missing required "
-                f"column(s): {missing}. Pass a DataFrame produced by OBDFile.curated_df."
-            )
-
-        gps_dt = curated_df["GPS Time"]
-        if not pd.api.types.is_datetime64_any_dtype(gps_dt):
-            gps_dt = pd.to_datetime(gps_dt, errors="coerce", utc=True)
-        elapsed_s = (gps_dt - gps_dt.dropna().iloc[0]).dt.total_seconds()
-
-        speed_raw = pd.to_numeric(curated_df["Speed (OBD)(km/h)"], errors="coerce")
-        smooth_speed = speed_raw.rolling(
-            window=self.window, center=True, min_periods=self.window
-        ).mean()
-        dt = elapsed_s.diff()
-        dt = dt.where(dt > 0)
-        acc_ms2 = (smooth_speed / 3.6).diff() / dt
-
-        passthrough = curated_df.rename(columns=OBD_COLUMN_MAP)
-
-        return pd.DataFrame(
-            {
-                "elapsed_s": elapsed_s,
-                "smooth_speed_kmh": smooth_speed,
-                "acc_ms2": acc_ms2,
-                "speed_kmh": passthrough["speed_kmh"],
-                "co2_g_per_km": pd.to_numeric(passthrough["co2_g_per_km"], errors="coerce"),
-                "engine_load_pct": pd.to_numeric(passthrough["engine_load_pct"], errors="coerce"),
-                "fuel_flow_lph": pd.to_numeric(passthrough["fuel_flow_lph"], errors="coerce"),
-            }
-        )
 
 
 # ── SegmentationConfig ────────────────────────────────────────────────────────

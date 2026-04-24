@@ -10,7 +10,7 @@ import pyarrow.parquet as pq
 import pytest
 from conftest import make_raw_obd_df
 
-from drive_cycle_calculator._schema import CURATED_COLS
+from drive_cycle_calculator.schema import CURATED_COLS
 from drive_cycle_calculator.obd_file import OBDFile
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
