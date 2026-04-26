@@ -71,7 +71,19 @@ p1 = (
 )
 
 p1.draw()
+# %%
+p2 = (
+    p9.ggplot(df)
+    + p9.geom_point(
+        p9.aes(x="Acceleration Sensor(X axis)(g)", y="Acceleration Sensor(Y axis)(g)"),
+        alpha=0.5,
+        shape=".",
+    )
+    + p9.theme_bw()
+    + p9.labs(title="Acceleration X vs Y", x="Acceleration X (g)", y="Acceleration Y (g)")
+)
 
+p2.draw()
 # %%
 obd.curated_df.columns
 # %% Generate Trip from OBDFile
