@@ -73,6 +73,14 @@ class OBDFile:
         self.name = name
         self._strict = strict
 
+        # there are some commmon columns that are often imported as str
+        # (e.g. Speed (OBD)(km/h)) due to Torque's use of "-" placeholders.
+        for col in ["Speed (OBD)(km/h)", "Engine Load(%)", "Engine RPM(rpm)"]:
+            try:
+                self._df[col] = pd.to_numeric(self._df[col], errors="coerce")
+            except KeyError:
+                logger.warning("'%s' column is missing from %s", col, name)
+
         # Fuel unit fallbacks
         if "Fuel flow rate/hour(l/hr)" not in self._df.columns:
             logger.warning("'Fuel flow rate/hour(l/hr)' column is missing from %s", name)
@@ -104,7 +112,9 @@ class OBDFile:
         # Permissive: inject NaN columns so curated_df always has the expected shape.
         for col in missing_cols:
             self._df[col] = float("nan")
-        logger.warning("Missing curated columns %s in %s — NaN columns injected.", missing_cols, self.name)
+        logger.warning(
+            "Missing curated columns %s in %s — NaN columns injected.", missing_cols, self.name
+        )
 
     def _compute_parquet_id(self) -> str:
         """6-char hex hash of GPS lat+lon bytes, or name-hash fallback."""
@@ -128,7 +138,9 @@ class OBDFile:
         end_time = valid.iloc[-1].to_pydatetime() if not valid.empty else None
 
         lat_col = self._df["Latitude"] if "Latitude" in self._df.columns else pd.Series(dtype=float)
-        lon_col = self._df["Longitude"] if "Longitude" in self._df.columns else pd.Series(dtype=float)
+        lon_col = (
+            self._df["Longitude"] if "Longitude" in self._df.columns else pd.Series(dtype=float)
+        )
 
         n_lat = lat_col.dropna().__len__()
 
@@ -324,9 +336,7 @@ class OBDFile:
 
         start_ts: pd.Timestamp = start_dt.iloc[0]
         end_dt = parser.to_datetime(raw_valid.iloc[[-1]]).dropna()
-        duration_s = (
-            int((end_dt.iloc[0] - start_ts).total_seconds()) if not end_dt.empty else 0
-        )
+        duration_s = int((end_dt.iloc[0] - start_ts).total_seconds()) if not end_dt.empty else 0
         stamp = start_ts.strftime("%Y%m%d-%H%M%S")
         hash6 = self._compute_parquet_id()
         return f"t{stamp}-{duration_s}-{hash6}"
