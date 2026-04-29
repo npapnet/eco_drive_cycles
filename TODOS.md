@@ -1,5 +1,37 @@
 # TODOS
 
+## P2 - Add `dcc clean` command
+
+clean the trip catalog and metadata. The user can specify the path to the catalog and metadata.
+
+
+## P2 - revisit cli commands workflow 
+
+Why: Ladikas data processing indicated problems with the current workflow. 
+
+The current workflow is:
+- `dcc ingest`
+- `dcc extract` 
+- `dcc analyze`
+- `dcc gui`
+
+
+**Issues identified with the current workflow:**
+
+1. **Ingest**: when ingesting the same files, I was expecting that the existing files will be overwritten, however this was not the case. 
+2. **extract** could use a filter with the name of the user. 
+3. **analyse**: only outputs to the console. It would be better to have an option to output to a file. It was unclear which db or set of data it used. 
+4. **gui**:
+    - The gui during analysis tried to load files and could not ( reporte to hte console something like `<path>\drive_cycle_calculator\cli\gui.py:137: UserWarning: Trip 't20250813-092120-384-3bdac5': cannot load '<path to repo>>\\data\\trips\\t20250813-092120-384-3bdac5.parquet' — File not found: <path to repo>\data\trips\t20250813-092120-384-3bdac5.parquet. Skipping.`)
+    - There was no option for outputing the data, nor reporting fo the similarity measures. 
+    - There were no filters 
+  
+
+I am focusing towards an approach that creates for the analysis a dedicated folder based on the date and time of the analysis, and all the outputs of the analysis are stored in that folder. This folder will include the similarity measures, the representative microtrips, and the representative driving cycle. 
+
+
+
+
 ## P1 - Simplify Trip Dataframe Creation in Tests
 
 **What:**: consider using a conftest.py fixture that generates a simple, valid Trip DataFrame for testing purposes. This would eliminate the need for manually constructing DataFrames in each test case, reducing boilerplate and improving readability. 

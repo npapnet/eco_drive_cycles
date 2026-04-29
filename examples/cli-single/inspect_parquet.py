@@ -24,6 +24,9 @@ import plotnine as p9
 
 from drive_cycle_calculator.obd_file import OBDFile
 
+%load_ext autoreload
+%autoreload 2
+
 # %%
 
 # if len(sys.argv) < 2:
@@ -43,7 +46,7 @@ parquet_files = list(DATADIR.glob("*.parquet"))
 assert len(parquet_files) > 0
 
 # pick one file
-path = parquet_files[0]
+path = parquet_files[3]
 print(path)
 # %%
 

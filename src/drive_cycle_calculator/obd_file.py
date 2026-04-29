@@ -103,6 +103,9 @@ class OBDFile:
 
         self._validate_columns()
 
+        # check for unreasonable values
+        self._check_speed_max()
+
     def _validate_columns(self) -> None:
         missing_cols = set(CURATED_COLS) - set(self._df.columns)
         if not missing_cols:
@@ -115,6 +118,25 @@ class OBDFile:
         logger.warning(
             "Missing curated columns %s in %s — NaN columns injected.", missing_cols, self.name
         )
+
+    def _check_speed_max(self):
+        """Check that "Speed (OBD)(km/h)" column is not unreasonable.
+
+        why: some resuls reported OBD speed max of 3e38 km/h, probably due to a
+        sensor glitch during the trip. The threshold is set to 300 km/h.
+
+        Drop all the values in that range, which are likely noise.
+
+        """
+        max_speed = self._df["Speed (OBD)(km/h)"].max()
+        OBD_MAX_THRESHOLD = 300
+        if max_speed > OBD_MAX_THRESHOLD:
+            logger.warning(
+                "Max speed is unreasonable: %f km/h. Dropping values > %dkm/h",
+                max_speed,
+                OBD_MAX_THRESHOLD,
+            )
+            self._df = self._df[self._df["Speed (OBD)(km/h)"] <= OBD_MAX_THRESHOLD]
 
     def _compute_parquet_id(self) -> str:
         """6-char hex hash of GPS lat+lon bytes, or name-hash fallback."""
