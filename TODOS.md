@@ -1,4 +1,16 @@
-# TODOS
+# Immediate Next Steps
+
+## P1 - Add `dcc ingest` command
+
+**Motivation**: when ingesting the same files, I was expecting that the existing files will be overwritten, however this was not the case 
+
+
+**PROPOSAL**: add swithes --safe, --force? and add a warning message if the file exists:
+- When safe(default ?), the ingest command will check if the file exists and if it does, it will skip it(ask user to confirm?). 
+- When force, the ingest command will overwrite the file. I am leaning towards this behavior.
+
+
+# Backlog
 
 ## P2 - Add `dcc clean` command
 
@@ -18,7 +30,7 @@ The current workflow is:
 
 **Issues identified with the current workflow:**
 
-1. **Ingest**: when ingesting the same files, I was expecting that the existing files will be overwritten, however this was not the case (add swithes --safe, --force? and add a warning message if the file exists )
+1. ~~**Ingest**: when ingesting the same files, I was expecting that the existing files will be overwritten, however this was not the case (add swithes --safe, --force? and add a warning message if the file exists )~~
 2. **extract** could use a filter with the name of the user. 
 3. **analyse**: only outputs to the console. It would be better to have an option to output to a file. It was unclear which db or set of data it used. 
 4. **gui**:
@@ -83,17 +95,6 @@ I am focusing towards an approach that creates for the analysis a dedicated fold
 
 **Depends on:** Parquet + DuckDB persistence proven in practice ✓.
 
----
-
-## P2 — Deduplicate similarity scoring in DriveGUI speed_profile.py
-
-**What:** `compute_speed_profile()` in `students/DriveGUI/metrics.py` uses its own inline 2-metric selection while `find_representative_sheet()` uses 7 metrics. They can return different sessions — a scientific correctness issue.
-
-**Where:** `students/DriveGUI/metrics.py:272`
-
-**Effort:** S (human: ~1 hr / CC: ~5 min)
-
-**Constraint:** `students/DriveGUI/` is FROZEN. Fix is limited to internal DriveGUI logic only — no imports from `src/drive_cycle_calculator`.
 
 ---
 
@@ -136,137 +137,3 @@ I am focusing towards an approach that creates for the analysis a dedicated fold
 **Depends on:** Parquet + DuckDB persistence layer ✓.
 
 
-# DONE
-
-
-## ~~P1 — Simplify Trip Dataframe Creation in Tests~~ ✓ DONE (2026-04-24, branch `develop`)
-
-**What:**: consider using a conftest.py fixture that generates a simple, valid Trip DataFrame for testing purposes. This would eliminate the need for manually constructing DataFrames in each test case, reducing boilerplate and improving readability. 
-
-**Why:** Many tests currently construct Trip DataFrames from scratch, which can be verbose and error-prone. A fixture would centralize this logic, making it easier to maintain and update the test data structure as needed.
-
-
-
-## ~~P1 — Microtrip segmentation~~ ✓ DONE (2026-04-23, branch `feature/microtrips`)
-
-**Shipped:**
-- `schema.py` — `SegmentationConfig` Pydantic model (stop/duration/distance thresholds).
-- `microtrip.py` — `Microtrip` Pydantic model with weakref data access (D1: no parquet reload fallback).
-- `segmentation.py` — `SegmentBoundary` dataclass, `detect_boundaries()`, `build_microtrips()`.
-- `trip.py` — `parquet_id` param, `data`/`file` public properties, `segment(config)` method.
-- `obd_file.py` — `to_trip()` now passes `parquet_id`.
-- `tests/test_segmentation.py` — 38 tests covering boundary detection, object construction, filtering, data access, and degenerate inputs.
-- Spec archived at `docs/designs/archive/microtrip_design_spec.md`.
-
----
-
-## ~~P2 — CLI entry point~~ ✓ DONE
-
-All five subcommands shipped as part of the v0.3 refactor (package v0.1.0):
-`dcc config-init`, `dcc ingest`, `dcc extract`, `dcc analyze`, `dcc gui`.
-`dcc extract` goes beyond the original spec — supports `--output duckdb|csv|xlsx`,
-date filters, and GPS centroid filters.
-
----
-
-## ~~P1 — Clean up remaining legacy code (to_parquet_optimised)~~ ✓ DONE
-
-`OBDFile.to_parquet_optimised()` removed. `OBDFile.to_parquet(path, user_metadata)`
-is the canonical path and now embeds `ParquetMetadata` JSON.
-
----
-
-## ~~v0.3 refactor~~ ✓ DONE
-
-**Shipped in package v0.1.0 (2026-04-19):**
-- `schema.py` — Pydantic metadata models (`UserMetadata`, `IngestProvenance`,
-  `ComputedTripStats`, `ParquetMetadata`) + `ProcessingConfig` (migrated from `@dataclass`).
-- `OBDFile` updated: `from_file()`, `parquet_name`, `strict` mode, fuel unit fallback,
-  `to_parquet(user_metadata)` embeds `ParquetMetadata` JSON.
-- `processing_config.py` is now a re-export shim.
-- Full CLI: `config-init`, `ingest`, `extract`, `analyze`, `gui`.
-
----
-
-## ~~P1 — OBDFile + ProcessingConfig refactor~~ ✓ DONE
-
-**What:** Two-stage archive pipeline. `OBDFile` wraps a raw OBD xlsx/CSV/Parquet file.
-`ProcessingConfig` (dataclass with `window` and `stop_threshold_kmh`) applies smoothing,
-acceleration derivation, and column renaming via `apply(curated_df)`. `DEFAULT_CONFIG`
-is `ProcessingConfig(window=4)`.
-
-**Shipped:**
-- `src/drive_cycle_calculator/_schema.py` — `OBD_COLUMN_MAP`, `CURATED_COLS`
-- `src/drive_cycle_calculator/gps_time_parser.py` — `GpsTimeParser`
-- `src/drive_cycle_calculator/obd_file.py` — `OBDFile.from_xlsx/from_csv/from_parquet`, `to_parquet` (v2 format), `curated_df`, `quality_report`, `to_trip`
-- `src/drive_cycle_calculator/processing_config.py` — `ProcessingConfig`, `config_hash`, `DEFAULT_CONFIG`
-- `src/drive_cycle_calculator/trip_collection.py` — `TripCollection` extracted from `trip.py`; adds `from_folder_raw`, `from_archive_parquets`, `from_duckdb_catalog` (eager via OBDFile)
-- `scripts/migrate_to_archive.py` — one-shot xlsx → v2 Parquet converter
-- `examples/cli/ingest.py` — two-stage ingest workflow
-- 129 tests passing
-
-**Processed DataFrame columns** (output of `ProcessingConfig.apply()`):
-`elapsed_s`, `smooth_speed_kmh`, `acc_ms2`, `speed_kmh`, `co2_g_per_km`, `engine_load_pct`, `fuel_flow_lph`.
-Note: `speed_ms`, `acceleration_ms2`, `deceleration_ms2` were removed as redundant.
-
----
-
-## ~~P1 — Remove legacy code from _computations.py~~ ✓ DONE
-
-**Removed:** `process_raw_df()`, `load_raw_df()`, `smooth_and_derive()`, `_SEVEN_METRIC_KEYS`,
-`_REQUIRED_RAW_COLS` from `_computations.py`. `_similarity_calcs.py` module folded into
-`trip_collection.py`. `similarity()` and `_SEVEN_METRIC_KEYS` now live in `trip_collection.py`.
-
-**Remaining in `_computations.py`:** None. Completely deleted after migrating `gps_to_duration_seconds()` to `GpsTimeParser`.
-
----
-
-## ~~P2~~ → ~~P1 — Migrate internal column names from Greek to English~~ ✓ DONE
-
-Internal package code uses English column names. DriveGUI Excel output remains Greek (user-facing).
-
----
-
-## ~~P1 — Parquet + DuckDB persistence layer~~ ✓ DONE
-
-**Current storage layout:**
-```
-data/
-  trips/
-    trackLog-2019-Sep-16_10-58-16.parquet   # v2 archive (raw OBD columns)
-    trackLog-2019-Sep-16_18-45-06.parquet
-    …
-  metadata.duckdb                           # catalog: trip_metadata table
-```
-
-`TripCollection.from_archive_parquets()` is the canonical constructor.
-`TripCollection.from_parquet()` (v1 processed Parquets) is deprecated, kept for backward compat.
-
----
-
-## ~~P1 — Examples directory (CLI + GUI)~~ ✓ DONE
-
-- `examples/cli/ingest.py` — two-stage ingest: `from_folder_raw` → `OBDFile.to_parquet` → `from_archive_parquets` → `to_duckdb_catalog`
-- `examples/cli/analyze.py` — loads from catalog → prints similarity scores + representative trip
-- `examples/gui/main.py` — Tkinter + Matplotlib GUI with scrollable log pane; three buttons:
-  "Import raw xlsx → write archive", "Load existing archive parquets", "Reload from catalog"
-- `examples/README.md`, `examples/cli/README.md`, `examples/gui/README.md`
-
----
-
-## ~~P2 — Freeze DriveGUI and restore self-sufficiency~~ ✓ DONE
-
-`students/DriveGUI/` is frozen. No imports from `src/drive_cycle_calculator`. See `students/DriveGUI/README.md` for the FROZEN notice.
-
----
-
-## ~~P1 — Remove os.chdir() from short_excel.py~~ ✓ DONE
-
----
-
-## ~~~P1 — Clean up remaining legacy code~~~ ✓ DONE
-
-1. **`smooth_and_derive()` in `processing_config.py`** — marked `TODO: Remove from codebase`. Used only by `TestSmoothAndDerive` in `test_processing_config.py`. Both the function and its test class should be deleted.
-2. **`_computations.gps_to_duration_seconds()`** — near-duplicate of `misc._gps_to_duration_seconds()`. Replaced with GpsTimeParser Class
-3. **`misc.py` housekeeping** — completely deleted after migrating date parsers to `GpsTimeParser`.
-4. **`TripCollection.from_parquet()`** — deprecated, reads old v1 processed Parquets. No tests reference it except backward-compat ones. Remove method and update any remaining tests.
