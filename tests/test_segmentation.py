@@ -1,11 +1,7 @@
 """Tests for microtrip segmentation.
 
-Covers: detect_boundaries, build_microtrips, Trip.segment, Microtrip data-access
-properties, and traceability fields.
-
-All tests in the logic-testing classes are expected to fail with
-NotImplementedError at this stage — that is the correct failure mode.
-Tests in TestMicrotripModelStructure cover the skeleton only and pass immediately.
+Covers: detect_boundaries, build_microtrips, MicrotripSegmenter, Trip.segment,
+Microtrip data-access properties, and traceability fields.
 """
 from __future__ import annotations
 
@@ -17,10 +13,12 @@ import pytest
 from drive_cycle_calculator.microtrip import Microtrip
 from drive_cycle_calculator.schema import SegmentationConfig
 from drive_cycle_calculator.segmentation import (
+    MicrotripSegmenter,
     SegmentBoundary,
     build_microtrips,
     detect_boundaries,
 )
+from drive_cycle_calculator.trip_collection import TripCollection
 from drive_cycle_calculator.trip import Trip
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -160,7 +158,7 @@ class TestMicrotripModelStructure:
         assert trip.parquet_id == ""
 
 
-# ── 1. Basic segmentation — expected to FAIL with NotImplementedError ─────────
+# ── 1. Basic segmentation ────────────────────────────────────────────────────
 
 
 class TestBasicSegmentation:
@@ -211,7 +209,7 @@ class TestBasicSegmentation:
         assert len(microtrips) == 2
 
 
-# ── 2. Boundary conditions — expected to FAIL with NotImplementedError ────────
+# ── 2. Boundary conditions ───────────────────────────────────────────────────
 
 
 class TestBoundaryConditions:
@@ -248,7 +246,7 @@ class TestBoundaryConditions:
         assert len(trip.segment(seg_config)) == 1
 
 
-# ── 3. Traceability — expected to FAIL with NotImplementedError ───────────────
+# ── 3. Traceability ──────────────────────────────────────────────────────────
 
 
 class TestTraceability:
@@ -284,7 +282,7 @@ class TestTraceability:
         _ = mt.samples  # must not raise after a successful bind
 
 
-# ── 4. Per-microtrip metrics — expected to FAIL with NotImplementedError ──────
+# ── 4. Per-microtrip metrics ─────────────────────────────────────────────────
 
 
 class TestMicrotripMetrics:
@@ -374,3 +372,83 @@ class TestMicrotripMetrics:
     def test_mt2_stop_duration_after(self, mt2):
         # elapsed_s at stop idx 55..59 → 59 − 55 = 4 s
         assert mt2.stop_duration_after == pytest.approx(4.0)
+
+
+# ── 5. MicrotripSegmenter ─────────────────────────────────────────────────────
+
+
+class TestMicrotripSegmenter:
+
+    def test_segment_returns_microtrips(self, two_stop_trip, seg_config):
+        segmenter = MicrotripSegmenter(seg_config)
+        result = segmenter.segment(two_stop_trip)
+        assert len(result) == 2
+
+    def test_segment_populates_trip_microtrips(self, two_stop_trip, seg_config):
+        segmenter = MicrotripSegmenter(seg_config)
+        segmenter.segment(two_stop_trip)
+        assert two_stop_trip.microtrips is not None
+        assert len(two_stop_trip.microtrips) == 2
+
+    def test_segment_stores_config_on_trip(self, two_stop_trip, seg_config):
+        segmenter = MicrotripSegmenter(seg_config)
+        segmenter.segment(two_stop_trip)
+        assert two_stop_trip.segmentation_config is seg_config
+
+    def test_kwargs_constructor_creates_config(self, two_stop_trip):
+        segmenter = MicrotripSegmenter(stop_threshold_kmh=2.0, microtrip_min_duration_s=10.0, microtrip_min_distance_m=10.0)
+        assert segmenter.config.stop_threshold_kmh == 2.0
+        result = segmenter.segment(two_stop_trip)
+        assert isinstance(result, list)
+
+    def test_resegment_with_different_config_overwrites(self, two_stop_trip, seg_config):
+        MicrotripSegmenter(seg_config).segment(two_stop_trip)
+        strict_config = SegmentationConfig(
+            stop_threshold_kmh=2.0,
+            microtrip_min_duration_s=100.0,  # nothing will pass
+            microtrip_min_distance_m=10.0,
+        )
+        MicrotripSegmenter(strict_config).segment(two_stop_trip)
+        assert two_stop_trip.microtrips == []
+        assert two_stop_trip.segmentation_config is strict_config
+
+    def test_segment_no_speed_column_returns_empty(self, seg_config):
+        df = pd.DataFrame({"elapsed_s": list(range(20))})
+        trip = Trip(df=df, name="no_speed")
+        result = MicrotripSegmenter(seg_config).segment(trip)
+        assert result == []
+        assert trip.microtrips == []
+
+    def test_microtrips_raises_before_segmentation(self):
+        df = _make_df([30.0] * 30)
+        trip = Trip(df=df, name="unsegmented")
+        with pytest.raises(RuntimeError, match="has not been segmented"):
+            _ = trip.microtrips
+
+    def test_segmentation_config_none_before_segmentation(self):
+        trip = Trip(df=_make_df([30.0] * 10), name="fresh")
+        assert trip.segmentation_config is None
+
+    def test_trip_segment_convenience_populates_microtrips(self, two_stop_trip, seg_config):
+        two_stop_trip.segment(seg_config)
+        assert len(two_stop_trip.microtrips) == 2
+
+    def test_segment_collection_returns_dict(self, seg_config):
+        df = _make_df(_TWO_STOP_SPEEDS)
+        t1 = Trip(df=df, name="a", parquet_id="aaa")
+        t2 = Trip(df=df, name="b", parquet_id="bbb")
+        tc = TripCollection([t1, t2])
+        segmenter = MicrotripSegmenter(seg_config)
+        result = segmenter.segment_collection(tc)
+        assert set(result.keys()) == {"a", "b"}
+        assert len(result["a"]) == 2
+        assert len(result["b"]) == 2
+
+    def test_segment_collection_populates_trips_in_place(self, seg_config):
+        df = _make_df(_TWO_STOP_SPEEDS)
+        t1 = Trip(df=df, name="x", parquet_id="xxx")
+        t2 = Trip(df=df, name="y", parquet_id="yyy")
+        tc = TripCollection([t1, t2])
+        MicrotripSegmenter(seg_config).segment_collection(tc)
+        assert len(t1.microtrips) == 2
+        assert len(t2.microtrips) == 2

@@ -40,6 +40,8 @@ class Trip:
         self.stop_threshold_kmh = stop_threshold_kmh
         self.parquet_id = parquet_id
         self._path: Path | None = None  # set by from_duckdb_catalog() for lazy loading
+        self._microtrips: list[Microtrip] | None = None
+        self._segmentation_config: SegmentationConfig | None = None
 
     @property
     def _df(self) -> pd.DataFrame:
@@ -228,52 +230,37 @@ class Trip:
 
     @property
     def microtrips(self) -> list[Microtrip]:
-        """Microtrip segmentation — not yet implemented.
+        """Microtrips produced by the last call to segment() or MicrotripSegmenter.segment().
 
-        Deprecated stub. Use Trip.segment(config) instead.
-
-        See microtrip_design_spec.md §4.2, TODOS.md: 'Microtrip segmentation (P1)'.
+        Raises RuntimeError if the trip has not been segmented yet.
         """
-        raise NotImplementedError(
-            "Use Trip.segment(config) to obtain microtrips. "
-            "See microtrip_design_spec.md §5 and TODOS.md for tracking."
-        )
+        if self._microtrips is None:
+            raise RuntimeError(
+                f"Trip {self.name!r} has not been segmented. "
+                "Call MicrotripSegmenter(config).segment(trip) or trip.segment(config) first."
+            )
+        return self._microtrips
+
+    @property
+    def segmentation_config(self) -> SegmentationConfig | None:
+        """The SegmentationConfig that produced the stored microtrips, or None."""
+        return self._segmentation_config
 
     def segment(self, config: SegmentationConfig) -> list[Microtrip]:
         """Segment this trip into microtrips using the given segmentation config.
 
-        Delegates to detect_boundaries() then build_microtrips(). Each returned
-        Microtrip has its weakref bound to this Trip instance.
-
-        Parameters
-        ----------
-        config : SegmentationConfig
-            Segmentation parameters: stop threshold, minimum durations,
-            minimum distance.
+        Convenience wrapper around MicrotripSegmenter. Stores the result on
+        this trip so trip.microtrips is accessible afterwards. Re-calling with
+        a different config overwrites the previous result.
 
         Returns
         -------
         list[Microtrip]
-            Ordered list of microtrips. Empty list if no valid segments are
-            found (e.g. trip is entirely stopped, or all segments are below
-            the minimum duration/distance filters).
-
-        See microtrip_design_spec.md §5 (two-stage design).
+            Ordered list of microtrips. Empty if no valid segments found.
         """
-        from drive_cycle_calculator.segmentation import build_microtrips, detect_boundaries
+        from drive_cycle_calculator.segmentation import MicrotripSegmenter
 
-        data = self.data
-        if "smooth_speed_kmh" not in data.columns:
-            return []
-
-        # reset_index guarantees 0-based positions that match iloc in build_microtrips.
-        speed = (
-            pd.to_numeric(data["smooth_speed_kmh"], errors="coerce")
-            .fillna(0.0)
-            .reset_index(drop=True)
-        )
-        boundaries = detect_boundaries(speed, config)
-        return build_microtrips(self, boundaries, config)
+        return MicrotripSegmenter(config).segment(self)
 
     # ── Dunder ────────────────────────────────────────────────────────────────
 

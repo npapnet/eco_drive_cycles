@@ -8,7 +8,6 @@
 
 from __future__ import annotations
 
-import re
 import warnings
 import zipfile
 from pathlib import Path
@@ -170,93 +169,6 @@ class TripCollection:
             except Exception as exc:
                 warnings.warn(f"Skipping {parquet_path.name}: {exc}", stacklevel=2)
         return cls(trips)
-
-    # ── Parquet helpers ───────────────────────────────────────────────────────
-
-    @staticmethod
-    def _sanitise_name(name: str) -> str:
-        """Replace filesystem-unsafe characters with '_'."""
-        return re.sub(r"[^\w\-.]", "_", name)
-
-    # ── DuckDB catalog ────────────────────────────────────────────────────────
-
-    def to_duckdb_catalog(
-        self,
-        db_path: str | Path,
-        config: "ProcessingConfig | None" = None,
-    ) -> None:
-        """Write/update trip metadata in a DuckDB catalog file.
-
-        Creates the ``trip_metadata`` table if it does not exist. Upserts rows
-        keyed on trip_id (INSERT OR REPLACE). Empty TripCollection is a no-op.
-
-        If the table already exists but lacks the ``config_hash`` column, an
-        ``ALTER TABLE ... ADD COLUMN IF NOT EXISTS`` is issued first.
-
-        Parameters
-        ----------
-        config : ProcessingConfig, optional
-            The config used when building this collection. Its hash is stored
-            in the catalog for reproducibility auditing.
-        """
-        import duckdb
-
-        from drive_cycle_calculator.processing_config import DEFAULT_CONFIG
-
-        if config is None:
-            config = DEFAULT_CONFIG
-
-        db_path = Path(db_path)
-        if not db_path.parent.exists():
-            raise FileNotFoundError(f"Directory not found: {db_path.parent}")
-
-        _CREATE = """
-        CREATE TABLE IF NOT EXISTS trip_metadata (
-            trip_id               VARCHAR PRIMARY KEY,
-            parquet_path          VARCHAR NOT NULL,
-            start_time            TIMESTAMP,
-            end_time              TIMESTAMP,
-            duration_s            DOUBLE,
-            avg_velocity_kmh      DOUBLE,
-            max_velocity_kmh      DOUBLE,
-            avg_acceleration_ms2  DOUBLE,
-            avg_deceleration_ms2  DOUBLE,
-            idle_time_pct         DOUBLE,
-            stop_count            INTEGER,
-            estimated_fuel_liters DOUBLE,
-            wavelet_anomaly_count INTEGER,
-            markov_matrix_uri     VARCHAR,
-            pla_trajectory_uri    VARCHAR,
-            config_hash           VARCHAR
-        )
-        """
-        with duckdb.connect(str(db_path)) as conn:
-            conn.execute(_CREATE)
-            # Migrate existing catalogs that lack config_hash column.
-            conn.execute("ALTER TABLE trip_metadata ADD COLUMN IF NOT EXISTS config_hash VARCHAR")
-            for trip in self.trips:
-                m = trip.metrics
-                sanitised = self._sanitise_name(trip.name)
-                parquet_path = str(trip._path) if trip._path is not None else ""
-                conn.execute(
-                    """
-                    INSERT OR REPLACE INTO trip_metadata VALUES (
-                        ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, ?
-                    )
-                    """,
-                    [
-                        sanitised,
-                        parquet_path,
-                        m["duration"] if not np.isnan(m["duration"]) else None,
-                        m["mean_speed"] if not np.isnan(m["mean_speed"]) else None,
-                        trip.max_speed if not np.isnan(trip.max_speed) else None,
-                        m["mean_acc"] if not np.isnan(m["mean_acc"]) else None,
-                        m["mean_dec"] if not np.isnan(m["mean_dec"]) else None,
-                        m["stop_pct"] if not np.isnan(m["stop_pct"]) else None,
-                        m["stops"],
-                        config.config_hash,
-                    ],
-                )
 
     @classmethod
     def from_duckdb_catalog(

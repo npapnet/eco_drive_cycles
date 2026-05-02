@@ -18,7 +18,7 @@ The current workflow is:
 
 **Issues identified with the current workflow:**
 
-1. **Ingest**: when ingesting the same files, I was expecting that the existing files will be overwritten, however this was not the case. 
+1. **Ingest**: when ingesting the same files, I was expecting that the existing files will be overwritten, however this was not the case (add swithes --safe, --force? and add a warning message if the file exists )
 2. **extract** could use a filter with the name of the user. 
 3. **analyse**: only outputs to the console. It would be better to have an option to output to a file. It was unclear which db or set of data it used. 
 4. **gui**:
@@ -30,22 +30,13 @@ The current workflow is:
 I am focusing towards an approach that creates for the analysis a dedicated folder based on the date and time of the analysis, and all the outputs of the analysis are stored in that folder. This folder will include the similarity measures, the representative microtrips, and the representative driving cycle. 
 
 
-
-
-## P1 - Simplify Trip Dataframe Creation in Tests
-
-**What:**: consider using a conftest.py fixture that generates a simple, valid Trip DataFrame for testing purposes. This would eliminate the need for manually constructing DataFrames in each test case, reducing boilerplate and improving readability. 
-
-**Why:** Many tests currently construct Trip DataFrames from scratch, which can be verbose and error-prone. A fixture would centralize this logic, making it easier to maintain and update the test data structure as needed.
-
-
 ## P1 — Representative microtrip selection
 
 **What:** `TripCollection.find_representative_microtrip() -> Microtrip` using the same 7-metric similarity scoring but at microtrip granularity.
 
 **Effort:** S (human: ~4 hrs / CC: ~10 min)
 
-**Depends on:** Microtrip segmentation ✓ landed (2026-04-23, branch `feature/microtrips`).
+**Depends on:** ~~v0.4 refactor (`MicrotripSegmenter` + `trip.microtrips`)~~ ✓ shipped (2026-05-03). `trip.microtrips` and `MicrotripSegmenter` are live.
 
 ---
 
@@ -81,16 +72,6 @@ I am focusing towards an approach that creates for the analysis a dedicated fold
 
 **Effort:** S (human: ~1 hr / CC: ~10 min)
 
----
-
-
-## P2 — Fix stop_percentage unit-detection heuristic (DriveGUI only)
-
-**What:** `stop_percentage.py:72` and `total_stop_percentage.py:85` in `students/DriveGUI/` silently multiply all-stop sessions by 3.6, producing wrong results for any session where all speed values are legitimately below 2.0 km/h.
-
-**Where:** `students/DriveGUI/stop_percentage.py:72`, `total_stop_percentage.py:85`
-
-**Effort:** S (human: ~2 hrs / CC: ~10 min)
 
 ---
 
@@ -112,6 +93,8 @@ I am focusing towards an approach that creates for the analysis a dedicated fold
 
 **Effort:** S (human: ~1 hr / CC: ~5 min)
 
+**Constraint:** `students/DriveGUI/` is FROZEN. Fix is limited to internal DriveGUI logic only — no imports from `src/drive_cycle_calculator`.
+
 ---
 
 ## P3 — Trip listbox in examples/gui/
@@ -119,6 +102,26 @@ I am focusing towards an approach that creates for the analysis a dedicated fold
 **What:** Show all trips in a scrollable listbox in `examples/gui/main.py`. Clicking a trip loads its speed profile. Representative trip is highlighted.
 
 **Effort:** S (human: ~2 hrs / CC: ~10 min)
+
+---
+
+## P2 — Microtrip export to Parquet
+
+**What:** Persist a `list[Microtrip]` to disk as Parquet files in a dedicated output folder, so microtrips can be loaded and analysed independently of the parent `Trip` objects.
+
+**Why:** Currently microtrips are in-memory only and lost when the process exits. Exporting them is a prerequisite for the analysis output folder workflow (`dcca-<YYYYMMDD-hhmm>/microtrips/`).
+
+**Depends on:** ~~v0.4 refactor~~ ✓ shipped (2026-05-03).
+
+---
+
+## P3 — TripCollection constructor-level filtering
+
+**What:** Optional filter parameters on `TripCollection.from_archive_parquets()` (and potentially `from_duckdb_catalog()`) so callers can load a pre-filtered collection without loading all trips first. Example: `from_archive_parquets(path, user="John")`.
+
+**Why:** `TripCollection` is a result/container type — filtering belongs at load time, not as a method on the collection. With single-driver datasets this is not needed; becomes useful when the archive contains multiple drivers.
+
+**Effort:** S
 
 ---
 
@@ -134,6 +137,15 @@ I am focusing towards an approach that creates for the analysis a dedicated fold
 
 
 # DONE
+
+
+## ~~P1 — Simplify Trip Dataframe Creation in Tests~~ ✓ DONE (2026-04-24, branch `develop`)
+
+**What:**: consider using a conftest.py fixture that generates a simple, valid Trip DataFrame for testing purposes. This would eliminate the need for manually constructing DataFrames in each test case, reducing boilerplate and improving readability. 
+
+**Why:** Many tests currently construct Trip DataFrames from scratch, which can be verbose and error-prone. A fixture would centralize this logic, making it easier to maintain and update the test data structure as needed.
+
+
 
 ## ~~P1 — Microtrip segmentation~~ ✓ DONE (2026-04-23, branch `feature/microtrips`)
 

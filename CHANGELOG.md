@@ -2,7 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.4.0] - 2026-04-23
+## [0.4.0] - 2026-05-03
+
+### Added
+- `segmentation.py` — `MicrotripSegmenter` class. Owns a `SegmentationConfig` and
+  drives both pipeline stages in one call. Constructor accepts a `SegmentationConfig`
+  object or raw kwargs forwarded to `SegmentationConfig`. `segment(trip)` populates
+  `trip._microtrips` and `trip._segmentation_config` in place and returns the list.
+  `segment_collection(tc)` segments all trips in a `TripCollection` and returns a
+  `dict[str, list[Microtrip]]`.
+- `Trip.microtrips` — real property (replaces `NotImplementedError` stub). Raises
+  `RuntimeError` with a clear message if the trip has not been segmented yet.
+- `Trip.segmentation_config` — read-only property returning the `SegmentationConfig`
+  that produced the stored microtrips, or `None` before first segmentation.
+- 11 new tests in `tests/test_segmentation.py` covering `MicrotripSegmenter.segment()`,
+  `segment_collection()`, `trip.microtrips` before/after segmentation, re-segmentation
+  overwrite, and the kwargs constructor form.
+
+### Changed
+- `Trip.segment(config)` now delegates to `MicrotripSegmenter(config).segment(self)`.
+  Backward-compatible: same signature and return value, now stores the result on `self`.
+
+### Removed
+- `TripCollection.to_duckdb_catalog()` — dead code since v0.3. DuckDB is produced by
+  `dcc extract`. Callers should use `dcc extract` instead.
+- `TripCollection._sanitise_name()` static method (internal helper only used by
+  `to_duckdb_catalog`).
+
+## [0.3.1] - 2026-04-23
 
 ### Added
 - `schema.py` — `SegmentationConfig` Pydantic model: `stop_threshold_kmh` (2.0),

@@ -17,6 +17,7 @@ from drive_cycle_calculator.schema import SegmentationConfig
 
 if TYPE_CHECKING:
     from drive_cycle_calculator.trip import Trip
+    from drive_cycle_calculator.trip_collection import TripCollection
 
 _logger = logging.getLogger(__name__)
 
@@ -218,3 +219,53 @@ def build_microtrips(
         microtrips.append(mt)
 
     return microtrips
+
+
+class MicrotripSegmenter:
+    """Configuration-owning segmenter that drives both pipeline stages.
+
+    Parameters
+    ----------
+    config : SegmentationConfig, optional
+        Explicit config object. If omitted, kwargs are forwarded to
+        SegmentationConfig().
+    **kwargs
+        Forwarded to SegmentationConfig when config is None. Allows
+        ``MicrotripSegmenter(stop_threshold_kmh=3.0)`` without importing
+        SegmentationConfig directly.
+    """
+
+    def __init__(
+        self,
+        config: SegmentationConfig | None = None,
+        **kwargs,
+    ) -> None:
+        self.config = config if config is not None else SegmentationConfig(**kwargs)
+
+    def segment(self, trip: Trip) -> list[Microtrip]:
+        """Segment trip into microtrips and store results on trip._microtrips."""
+        data = trip.data
+        if "smooth_speed_kmh" not in data.columns:
+            trip._microtrips = []
+            trip._segmentation_config = self.config
+            return []
+        speed = (
+            pd.to_numeric(data["smooth_speed_kmh"], errors="coerce")
+            .fillna(0.0)
+            .reset_index(drop=True)
+        )
+        boundaries = detect_boundaries(speed, self.config)
+        microtrips = build_microtrips(trip, boundaries, self.config)
+        trip._microtrips = microtrips
+        trip._segmentation_config = self.config
+        return microtrips
+
+    def segment_collection(
+        self, tc: TripCollection
+    ) -> dict[str, list[Microtrip]]:
+        """Segment all trips in a TripCollection.
+
+        Returns {trip.name: [Microtrip, ...]}. Each trip in tc is also
+        populated in place — tc.trips[i].microtrips works after this call.
+        """
+        return {trip.name: self.segment(trip) for trip in tc.trips}

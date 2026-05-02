@@ -126,9 +126,9 @@ class TestTrip:
         with pytest.raises(RuntimeError, match="not found"):
             _ = t.speed_profile
 
-    def test_microtrips_raises_not_implemented(self):
+    def test_microtrips_raises_before_segmentation(self):
         t = Trip(_make_processed_df(), "s")
-        with pytest.raises(NotImplementedError):
+        with pytest.raises(RuntimeError, match="has not been segmented"):
             _ = t.microtrips
 
     def test_repr(self):
