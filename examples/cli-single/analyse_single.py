@@ -35,8 +35,13 @@ ren_dict = {
 
 rev_dict = {value: key for key, value in ren_dict.items()}
 
+df["elapsed_s"] = (df["GPS Time"] - df["GPS Time"][0]).dt.total_seconds()
+
 df.rename(columns=rev_dict, inplace=True)
 
+# %%
+
+# %%
 df.columns
 # %%
 plt.plot(df["elapsed_s"], df["co2"])

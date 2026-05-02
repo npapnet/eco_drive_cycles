@@ -1,23 +1,34 @@
 # TODOS
 
+## P2 - Add `dcc clean` command
 
-## P1 — Microtrip segmentation
+clean the trip catalog and metadata. The user can specify the path to the catalog and metadata.
 
-**What:** `Trip.microtrips` returns actual `list[Microtrip]` instead of raising `NotImplementedError`.
 
-**Why:** Microtrips are the fundamental unit of analysis for WLTP-style driving-cycle construction. The current session-level similarity scoring is a stepping stone. Scientific goal: find the ensemble of microtrips whose collective statistics best match the overall distribution, then assemble the candidate cycle from them.
+## P2 - revisit cli commands workflow 
 
-**Algorithm:**
-1. Identify stop intervals (speed ≤ `stop_threshold_kmh` for ≥ N consecutive samples)
-2. Split the speed profile at those intervals
-3. Each contiguous moving segment = one Microtrip
-4. Compute per-microtrip metrics: duration, mean_speed, mean_acc, mean_dec, stop_pct
+Why: Ladikas data processing indicated problems with the current workflow. 
 
-**Effort:** M (human: ~1 day / CC: ~20 min)
+The current workflow is:
+- `dcc ingest`
+- `dcc extract` 
+- `dcc analyze`
+- `dcc gui`
 
-**Depends on:** `Trip` class shipped ✓. Implement `Microtrip` dataclass first.
 
----
+**Issues identified with the current workflow:**
+
+1. **Ingest**: when ingesting the same files, I was expecting that the existing files will be overwritten, however this was not the case (add swithes --safe, --force? and add a warning message if the file exists )
+2. **extract** could use a filter with the name of the user. 
+3. **analyse**: only outputs to the console. It would be better to have an option to output to a file. It was unclear which db or set of data it used. 
+4. **gui**:
+    - The gui during analysis tried to load files and could not ( reporte to hte console something like `<path>\drive_cycle_calculator\cli\gui.py:137: UserWarning: Trip 't20250813-092120-384-3bdac5': cannot load '<path to repo>>\\data\\trips\\t20250813-092120-384-3bdac5.parquet' — File not found: <path to repo>\data\trips\t20250813-092120-384-3bdac5.parquet. Skipping.`)
+    - There was no option for outputing the data, nor reporting fo the similarity measures. 
+    - There were no filters 
+  
+
+I am focusing towards an approach that creates for the analysis a dedicated folder based on the date and time of the analysis, and all the outputs of the analysis are stored in that folder. This folder will include the similarity measures, the representative microtrips, and the representative driving cycle. 
+
 
 ## P1 — Representative microtrip selection
 
@@ -25,7 +36,7 @@
 
 **Effort:** S (human: ~4 hrs / CC: ~10 min)
 
-**Depends on:** Microtrip segmentation (P1) must land first.
+**Depends on:** ~~v0.4 refactor (`MicrotripSegmenter` + `trip.microtrips`)~~ ✓ shipped (2026-05-03). `trip.microtrips` and `MicrotripSegmenter` are live.
 
 ---
 
@@ -61,16 +72,6 @@
 
 **Effort:** S (human: ~1 hr / CC: ~10 min)
 
----
-
-
-## P2 — Fix stop_percentage unit-detection heuristic (DriveGUI only)
-
-**What:** `stop_percentage.py:72` and `total_stop_percentage.py:85` in `students/DriveGUI/` silently multiply all-stop sessions by 3.6, producing wrong results for any session where all speed values are legitimately below 2.0 km/h.
-
-**Where:** `students/DriveGUI/stop_percentage.py:72`, `total_stop_percentage.py:85`
-
-**Effort:** S (human: ~2 hrs / CC: ~10 min)
 
 ---
 
@@ -92,6 +93,8 @@
 
 **Effort:** S (human: ~1 hr / CC: ~5 min)
 
+**Constraint:** `students/DriveGUI/` is FROZEN. Fix is limited to internal DriveGUI logic only — no imports from `src/drive_cycle_calculator`.
+
 ---
 
 ## P3 — Trip listbox in examples/gui/
@@ -99,6 +102,26 @@
 **What:** Show all trips in a scrollable listbox in `examples/gui/main.py`. Clicking a trip loads its speed profile. Representative trip is highlighted.
 
 **Effort:** S (human: ~2 hrs / CC: ~10 min)
+
+---
+
+## P2 — Microtrip export to Parquet
+
+**What:** Persist a `list[Microtrip]` to disk as Parquet files in a dedicated output folder, so microtrips can be loaded and analysed independently of the parent `Trip` objects.
+
+**Why:** Currently microtrips are in-memory only and lost when the process exits. Exporting them is a prerequisite for the analysis output folder workflow (`dcca-<YYYYMMDD-hhmm>/microtrips/`).
+
+**Depends on:** ~~v0.4 refactor~~ ✓ shipped (2026-05-03).
+
+---
+
+## P3 — TripCollection constructor-level filtering
+
+**What:** Optional filter parameters on `TripCollection.from_archive_parquets()` (and potentially `from_duckdb_catalog()`) so callers can load a pre-filtered collection without loading all trips first. Example: `from_archive_parquets(path, user="John")`.
+
+**Why:** `TripCollection` is a result/container type — filtering belongs at load time, not as a method on the collection. With single-driver datasets this is not needed; becomes useful when the archive contains multiple drivers.
+
+**Effort:** S
 
 ---
 
@@ -114,6 +137,28 @@
 
 
 # DONE
+
+
+## ~~P1 — Simplify Trip Dataframe Creation in Tests~~ ✓ DONE (2026-04-24, branch `develop`)
+
+**What:**: consider using a conftest.py fixture that generates a simple, valid Trip DataFrame for testing purposes. This would eliminate the need for manually constructing DataFrames in each test case, reducing boilerplate and improving readability. 
+
+**Why:** Many tests currently construct Trip DataFrames from scratch, which can be verbose and error-prone. A fixture would centralize this logic, making it easier to maintain and update the test data structure as needed.
+
+
+
+## ~~P1 — Microtrip segmentation~~ ✓ DONE (2026-04-23, branch `feature/microtrips`)
+
+**Shipped:**
+- `schema.py` — `SegmentationConfig` Pydantic model (stop/duration/distance thresholds).
+- `microtrip.py` — `Microtrip` Pydantic model with weakref data access (D1: no parquet reload fallback).
+- `segmentation.py` — `SegmentBoundary` dataclass, `detect_boundaries()`, `build_microtrips()`.
+- `trip.py` — `parquet_id` param, `data`/`file` public properties, `segment(config)` method.
+- `obd_file.py` — `to_trip()` now passes `parquet_id`.
+- `tests/test_segmentation.py` — 38 tests covering boundary detection, object construction, filtering, data access, and degenerate inputs.
+- Spec archived at `docs/designs/archive/microtrip_design_spec.md`.
+
+---
 
 ## ~~P2 — CLI entry point~~ ✓ DONE
 

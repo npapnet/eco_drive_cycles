@@ -13,6 +13,9 @@ from pathlib import Path
 
 import pandas as pd
 
+from drive_cycle_calculator.microtrip import Microtrip
+from drive_cycle_calculator.schema import SegmentationConfig
+
 
 class Trip:
     """One recorded driving session.
@@ -30,11 +33,15 @@ class Trip:
         df: pd.DataFrame | None = None,
         name: str = "",
         stop_threshold_kmh: float = 2.0,
+        parquet_id: str = "",
     ) -> None:
         self.__df = df
         self.name = name
         self.stop_threshold_kmh = stop_threshold_kmh
+        self.parquet_id = parquet_id
         self._path: Path | None = None  # set by from_duckdb_catalog() for lazy loading
+        self._microtrips: list[Microtrip] | None = None
+        self._segmentation_config: SegmentationConfig | None = None
 
     @property
     def _df(self) -> pd.DataFrame:
@@ -161,6 +168,30 @@ class Trip:
         """Mean negative deceleration (braking) in m/s²."""
         return self.metrics["mean_dec"]
 
+    # ── Public DataFrame accessors ────────────────────────────────────────────
+    #
+    # Microtrip._resolve_data() calls trip.data; trip.file is the parquet key.
+    # These are thin public aliases over the private lazy-load mechanism.
+
+    @property
+    def data(self) -> pd.DataFrame:
+        """The processed DataFrame for this trip.
+
+        Public alias for the internal lazy-load accessor. Required by
+        Microtrip._resolve_data().
+
+        See microtrip_design_spec.md §4.2.
+        """
+        return self._df
+
+    @property
+    def file(self) -> Path | None:
+        """Path to the archive Parquet backing this trip, or None if in-memory only.
+
+        See microtrip_design_spec.md §4.2.
+        """
+        return self._path
+
     # ── Speed profile (accesses full DataFrame) ───────────────────────────────
 
     @cached_property
@@ -195,17 +226,41 @@ class Trip:
             return float("nan")
         return float(pd.to_numeric(self._df["smooth_speed_kmh"], errors="coerce").max())
 
-    # ── Future stubs ──────────────────────────────────────────────────────────
+    # ── Segmentation ──────────────────────────────────────────────────────────
 
     @property
-    def microtrips(self) -> list:
-        """Microtrip segmentation — not yet implemented.
+    def microtrips(self) -> list[Microtrip]:
+        """Microtrips produced by the last call to segment() or MicrotripSegmenter.segment().
 
-        See TODOS.md: 'Microtrip segmentation (P1)'.
+        Raises RuntimeError if the trip has not been segmented yet.
         """
-        raise NotImplementedError(
-            "Microtrip segmentation is planned for a future release. See TODOS.md for tracking."
-        )
+        if self._microtrips is None:
+            raise RuntimeError(
+                f"Trip {self.name!r} has not been segmented. "
+                "Call MicrotripSegmenter(config).segment(trip) or trip.segment(config) first."
+            )
+        return self._microtrips
+
+    @property
+    def segmentation_config(self) -> SegmentationConfig | None:
+        """The SegmentationConfig that produced the stored microtrips, or None."""
+        return self._segmentation_config
+
+    def segment(self, config: SegmentationConfig) -> list[Microtrip]:
+        """Segment this trip into microtrips using the given segmentation config.
+
+        Convenience wrapper around MicrotripSegmenter. Stores the result on
+        this trip so trip.microtrips is accessible afterwards. Re-calling with
+        a different config overwrites the previous result.
+
+        Returns
+        -------
+        list[Microtrip]
+            Ordered list of microtrips. Empty if no valid segments found.
+        """
+        from drive_cycle_calculator.segmentation import MicrotripSegmenter
+
+        return MicrotripSegmenter(config).segment(self)
 
     # ── Dunder ────────────────────────────────────────────────────────────────
 

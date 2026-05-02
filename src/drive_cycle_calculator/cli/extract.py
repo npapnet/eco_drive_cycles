@@ -11,7 +11,8 @@ import pyarrow.parquet as pq
 import typer
 
 from drive_cycle_calculator.obd_file import OBDFile
-from drive_cycle_calculator.schema import ParquetMetadata, ProcessingConfig
+from drive_cycle_calculator.processing_config import ProcessingConfig
+from drive_cycle_calculator.schema import ParquetMetadata
 
 app = typer.Typer(help="Extract trip metrics from archive Parquets into DuckDB / CSV / XLSX.")
 

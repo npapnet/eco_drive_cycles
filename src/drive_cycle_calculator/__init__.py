@@ -11,7 +11,8 @@ except PackageNotFoundError:
 
 # Import the main classes from the submodules
 from .obd_file import OBDFile
+from .segmentation import MicrotripSegmenter
 from .trip import Trip
 from .trip_collection import TripCollection
 
-__all__ = ["Trip", "TripCollection", "OBDFile"]
+__all__ = ["Trip", "TripCollection", "OBDFile", "MicrotripSegmenter"]

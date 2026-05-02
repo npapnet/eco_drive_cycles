@@ -2,6 +2,68 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.0] - 2026-05-03
+
+### Added
+- `segmentation.py` — `MicrotripSegmenter` class. Owns a `SegmentationConfig` and
+  drives both pipeline stages in one call. Constructor accepts a `SegmentationConfig`
+  object or raw kwargs forwarded to `SegmentationConfig`. `segment(trip)` populates
+  `trip._microtrips` and `trip._segmentation_config` in place and returns the list.
+  `segment_collection(tc)` segments all trips in a `TripCollection` and returns a
+  `dict[str, list[Microtrip]]`.
+- `Trip.microtrips` — real property (replaces `NotImplementedError` stub). Raises
+  `RuntimeError` with a clear message if the trip has not been segmented yet.
+- `Trip.segmentation_config` — read-only property returning the `SegmentationConfig`
+  that produced the stored microtrips, or `None` before first segmentation.
+- 11 new tests in `tests/test_segmentation.py` covering `MicrotripSegmenter.segment()`,
+  `segment_collection()`, `trip.microtrips` before/after segmentation, re-segmentation
+  overwrite, and the kwargs constructor form.
+
+### Changed
+- `Trip.segment(config)` now delegates to `MicrotripSegmenter(config).segment(self)`.
+  Backward-compatible: same signature and return value, now stores the result on `self`.
+
+### Removed
+- `TripCollection.to_duckdb_catalog()` — dead code since v0.3. DuckDB is produced by
+  `dcc extract`. Callers should use `dcc extract` instead.
+- `TripCollection._sanitise_name()` static method (internal helper only used by
+  `to_duckdb_catalog`).
+
+## [0.3.1] - 2026-04-23
+
+### Added
+- `schema.py` — `SegmentationConfig` Pydantic model: `stop_threshold_kmh` (2.0),
+  `stop_min_duration_s` (1.0), `microtrip_min_duration_s` (15.0),
+  `microtrip_min_distance_m` (50.0). Validator enforces `microtrip_min_duration_s ≥ 5.0`.
+- `microtrip.py` — `Microtrip` Pydantic model. Fields: `trip_file` (Path),
+  `parquet_id` (str), `start_idx`, `end_idx`, `stop_start_idx`, `stop_end_idx`
+  (all iloc positions). Properties: `samples`, `stop_samples`, `stop_duration_after`.
+  Data access via weakref; raises `RuntimeError` if parent Trip is GC'd (no parquet
+  reload fallback by design — see D1 in microtrip_design_spec).
+- `segmentation.py` — two-stage segmentation: `detect_boundaries(speed, config)`
+  (Stage 1, Trip-independent; operates on speed array only) and
+  `build_microtrips(trip, boundaries, config)` (Stage 2, applies duration and
+  distance filters, binds each `Microtrip` to the parent `Trip` via weakref).
+  `SegmentBoundary` dataclass carries iloc bounds between stages.
+- `Trip.segment(config: SegmentationConfig) → list[Microtrip]` — top-level entry
+  point. Returns `[]` for degenerate input (missing `smooth_speed_kmh`, all-stopped
+  signal, all segments below threshold filters).
+- `Trip.data` / `Trip.file` — public aliases for the internal lazy-load DataFrame
+  and backing Parquet path. Required by `Microtrip._resolve_data()`.
+- `Trip.__init__` — new `parquet_id: str = ""` parameter (canonical DuckDB foreign
+  key, forwarded from `OBDFile.to_trip()`). Backward-compatible default.
+- 38 new tests in `tests/test_segmentation.py`: boundary detection, object
+  construction, duration/distance filtering, weakref GC behaviour, degenerate inputs.
+
+### Changed
+- `OBDFile.to_trip()` now forwards `parquet_id` to `Trip.__init__` so the canonical
+  DuckDB key is available on in-memory Trip objects.
+- `Trip.microtrips` property message updated to direct callers to `Trip.segment(config)`.
+- Design specs reorganised: `docs/designs/active/` → `docs/designs/archive/`
+  (both `refactor_v0.3.md` and `microtrip_design_spec.md` archived).
+
+---
+
 ## [0.1.0] - 2026-04-19
 
 ### Added

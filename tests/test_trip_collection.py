@@ -2,65 +2,36 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pandas as pd
 import pytest
+from conftest import make_raw_obd_df
 
 from drive_cycle_calculator.obd_file import OBDFile
 from drive_cycle_calculator.processing_config import ProcessingConfig
 from drive_cycle_calculator.trip import Trip
 from drive_cycle_calculator.trip_collection import TripCollection
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-
-def _make_raw_df(n: int = 20, speed_kmh: float = 30.0) -> pd.DataFrame:
-    timestamps = [f"Mon Sep 22 10:30:{i:02d} +0300 2019" for i in range(n)]
-    return pd.DataFrame(
-        {
-            "GPS Time": timestamps,
-            "Speed (OBD)(km/h)": [speed_kmh] * n,
-            "CO\u2082 in g/km (Average)(g/km)": [120.0] * n,
-            "Engine Load(%)": [50.0] * n,
-            "Fuel flow rate/hour(l/hr)": [2.0] * n,
-            "Longitude": [24.0] * n,
-            "Latitude": [60.0] * n,
-            "Altitude": [100.0] * n,
-        }
-    )
-
-
-def _write_archive(path: Path, speed_kmh: float = 30.0, n: int = 20) -> None:
-    """Write a v2 archive Parquet via OBDFile."""
-    OBDFile(_make_raw_df(n=n, speed_kmh=speed_kmh), path.stem).to_parquet(path)
-
-
-def _write_xlsx(path: Path, speed_kmh: float = 30.0, n: int = 20) -> None:
-    _make_raw_df(n=n, speed_kmh=speed_kmh).to_excel(path, index=False)
-
-
 # ── from_folder (uses OBDFile pipeline) ──────────────────────────────────────
 
 
 class TestFromFolder:
-    def test_loads_all_xlsx(self, tmp_path):
+    def test_loads_all_xlsx(self, tmp_path, raw_xlsx):
         """from_folder processes all .xlsx files and returns a TripCollection."""
-        _write_xlsx(tmp_path / "trip_a.xlsx")
-        _write_xlsx(tmp_path / "trip_b.xlsx")
+        raw_xlsx("trip_a.xlsx")
+        raw_xlsx("trip_b.xlsx")
         tc = TripCollection.from_folder(tmp_path)
         assert len(tc) == 2
 
-    def test_produces_no_speed_ms_column(self, tmp_path):
+    def test_produces_no_speed_ms_column(self, tmp_path, raw_xlsx):
         """from_folder uses OBDFile pipeline — output has speed_kmh not speed_ms."""
-        _write_xlsx(tmp_path / "trip.xlsx")
+        raw_xlsx("trip.xlsx")
         tc = TripCollection.from_folder(tmp_path)
         assert "speed_ms" not in tc.trips[0]._df.columns
         assert "speed_kmh" in tc.trips[0]._df.columns
 
-    def test_custom_config_applied(self, tmp_path):
+    def test_custom_config_applied(self, tmp_path, raw_xlsx):
         """ProcessingConfig.window is passed through to OBDFile.to_trip."""
-        _write_xlsx(tmp_path / "trip.xlsx", n=30)
+        raw_xlsx("trip.xlsx", n=30)
         tc4 = TripCollection.from_folder(tmp_path, config=ProcessingConfig(window=4))
         tc8 = TripCollection.from_folder(tmp_path, config=ProcessingConfig(window=8))
         # Both must produce valid trips; smooth speed widths will differ
@@ -71,12 +42,10 @@ class TestFromFolder:
         with pytest.raises(FileNotFoundError):
             TripCollection.from_folder(tmp_path / "ghost")
 
-    def test_bad_file_skipped_with_warning(self, tmp_path, recwarn):
+    def test_bad_file_skipped_with_warning(self, tmp_path, raw_xlsx, recwarn):
         """Unparseable xlsx files are skipped, not fatal."""
-        good = tmp_path / "good.xlsx"
-        bad = tmp_path / "bad.xlsx"
-        _write_xlsx(good)
-        bad.write_bytes(b"not an xlsx")
+        raw_xlsx("good.xlsx")
+        (tmp_path / "bad.xlsx").write_bytes(b"not an xlsx")
         tc = TripCollection.from_folder(tmp_path)
         assert len(tc) == 1
         assert any("bad.xlsx" in str(w.message) for w in recwarn.list)
@@ -86,18 +55,18 @@ class TestFromFolder:
 
 
 class TestFromFolderRaw:
-    def test_returns_list_of_obd_files(self, tmp_path):
+    def test_returns_list_of_obd_files(self, tmp_path, raw_xlsx):
         """from_folder_raw returns list[OBDFile], not a TripCollection."""
-        _write_xlsx(tmp_path / "trip_a.xlsx")
-        _write_xlsx(tmp_path / "trip_b.xlsx")
+        raw_xlsx("trip_a.xlsx")
+        raw_xlsx("trip_b.xlsx")
         result = TripCollection.from_folder_raw(tmp_path)
         assert isinstance(result, list)
         assert len(result) == 2
         assert all(isinstance(f, OBDFile) for f in result)
 
-    def test_no_processing_applied(self, tmp_path):
+    def test_no_processing_applied(self, tmp_path, raw_xlsx):
         """Raw files have original column names, not renamed English names."""
-        _write_xlsx(tmp_path / "trip.xlsx")
+        raw_xlsx("trip.xlsx")
         result = TripCollection.from_folder_raw(tmp_path)
         assert "Speed (OBD)(km/h)" in result[0]._df.columns
 
@@ -110,32 +79,31 @@ class TestFromFolderRaw:
 
 
 class TestFromArchiveParquets:
-    def test_loads_v2_parquets(self, tmp_path):
+    def test_loads_v2_parquets(self, tmp_path, archive_parquet):
         """from_archive_parquets loads v2 archive Parquets into Trips."""
-        _write_archive(tmp_path / "trip_a.parquet")
-        _write_archive(tmp_path / "trip_b.parquet")
+        archive_parquet("trip_a.parquet")
+        archive_parquet("trip_b.parquet")
         tc = TripCollection.from_archive_parquets(tmp_path)
         assert len(tc) == 2
 
     def test_v1_parquet_skipped_with_warning(self, tmp_path):
         """from_archive_parquets warns+skips a v1 Parquet rather than aborting."""
-        df = _make_raw_df()
+        df = make_raw_obd_df()
         df["smooth_speed_kmh"] = 30.0  # v1 marker
         df.to_parquet(tmp_path / "v1.parquet", index=False)
         with pytest.warns(UserWarning, match="processed format"):
             tc = TripCollection.from_archive_parquets(tmp_path)
         assert len(tc) == 0
 
-    def test_custom_config_applied(self, tmp_path):
+    def test_custom_config_applied(self, tmp_path, archive_parquet):
         """ProcessingConfig is forwarded to OBDFile.to_trip."""
-        _write_archive(tmp_path / "trip.parquet", n=30)
+        archive_parquet("trip.parquet", n=30)
         tc = TripCollection.from_archive_parquets(tmp_path, config=ProcessingConfig(window=4))
         assert "smooth_speed_kmh" in tc.trips[0]._df.columns
 
-    def test_trip_path_set(self, tmp_path):
+    def test_trip_path_set(self, tmp_path, archive_parquet):
         """Each trip._path is set to its archive Parquet path."""
-        p = tmp_path / "trip_a.parquet"
-        _write_archive(p)
+        p = archive_parquet("trip_a.parquet")
         tc = TripCollection.from_archive_parquets(tmp_path)
         assert tc.trips[0]._path == p
 
@@ -175,12 +143,11 @@ class TestDuckDBCatalog:
         tc = TripCollection.from_duckdb_catalog(db)
         assert len(tc) == 0
 
-    def test_eager_load_via_catalog(self, tmp_path):
+    def test_eager_load_via_catalog(self, tmp_path, archive_parquet):
         """from_duckdb_catalog loads trips eagerly from trip_metrics table."""
         import duckdb
 
-        p = tmp_path / "trip.parquet"
-        _write_archive(p, speed_kmh=45.0)
+        p = archive_parquet("trip.parquet", speed_kmh=45.0)
         db = tmp_path / "catalog.db"
         with duckdb.connect(str(db)) as conn:
             conn.execute("""
@@ -219,31 +186,30 @@ class TestDuckDBCatalog:
 
 
 class TestSimilarityTC:
-    def _make_tc(self, speeds: list[float], tmp_path: Path) -> TripCollection:
+    def _make_tc(self, speeds: list[float], archive_parquet) -> TripCollection:
         """Build a TripCollection from a list of constant speeds."""
         trips = []
         for i, spd in enumerate(speeds):
-            p = tmp_path / f"trip_{i}.parquet"
-            df = _make_raw_df(n=30, speed_kmh=spd)
+            df = make_raw_obd_df(n=30, speed_kmh=spd)
             df["Longitude"] = float(24 + i)  # unique coords → unique parquet_id per trip
-            OBDFile(df, f"trip_{i}").to_parquet(p)
+            p = archive_parquet(f"trip_{i}.parquet", df=df)
             trips.append(OBDFile.from_parquet(p).to_trip())
         return TripCollection(trips)
 
-    def test_similarity_scores_returns_dict(self, tmp_path):
-        tc = self._make_tc([30.0, 40.0, 50.0], tmp_path)
+    def test_similarity_scores_returns_dict(self, archive_parquet):
+        tc = self._make_tc([30.0, 40.0, 50.0], archive_parquet)
         scores = tc.similarity_scores()
         assert isinstance(scores, dict)
         assert len(scores) == 3
 
-    def test_find_representative_returns_trip(self, tmp_path):
-        tc = self._make_tc([30.0, 40.0, 50.0], tmp_path)
+    def test_find_representative_returns_trip(self, archive_parquet):
+        tc = self._make_tc([30.0, 40.0, 50.0], archive_parquet)
         rep = tc.find_representative()
         assert isinstance(rep, Trip)
 
-    def test_find_representative_middle_trip_wins(self, tmp_path):
+    def test_find_representative_middle_trip_wins(self, archive_parquet):
         """The middle-speed trip should score highest (closest to fleet average)."""
-        tc = self._make_tc([10.0, 30.0, 50.0], tmp_path)
+        tc = self._make_tc([10.0, 30.0, 50.0], archive_parquet)
         rep = tc.find_representative()
         assert rep.mean_speed == pytest.approx(tc.trips[1].mean_speed, rel=0.1)
 

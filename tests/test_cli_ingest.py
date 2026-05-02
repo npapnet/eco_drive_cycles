@@ -2,11 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
-import pandas as pd
 import pyarrow.parquet as pq
-import pytest
 from typer.testing import CliRunner
 
 from drive_cycle_calculator.cli.main import app
@@ -15,39 +11,21 @@ from drive_cycle_calculator.schema import ParquetMetadata
 runner = CliRunner()
 
 
-def _write_raw_xlsx(path: Path, speed_kmh: float = 30.0, n: int = 10) -> None:
-    """Write a minimal raw OBD xlsx file with all required columns."""
-    timestamps = [f"Mon Sep 22 10:30:{i:02d} +0300 2019" for i in range(n)]
-    pd.DataFrame(
-        {
-            "GPS Time": timestamps,
-            "Speed (OBD)(km/h)": [speed_kmh] * n,
-            "CO\u2082 in g/km (Average)(g/km)": [120.0] * n,
-            "Engine Load(%)": [50.0] * n,
-            "Fuel flow rate/hour(l/hr)": [2.0] * n,
-            "Longitude": [24.0] * n,
-            "Latitude": [60.0] * n,
-        }
-    ).to_excel(path, index=False)
-
-
 class TestCliIngest:
-    def test_no_duckdb_created(self, tmp_path):
+    def test_no_duckdb_created(self, tmp_path, raw_xlsx):
         """ingest does NOT create any DuckDB file — only archive Parquets."""
         raw = tmp_path / "raw"
-        raw.mkdir()
         out = tmp_path / "out"
-        _write_raw_xlsx(raw / "trip.xlsx")
+        raw_xlsx(raw / "trip.xlsx")
         result = runner.invoke(app, ["ingest", str(raw), str(out)])
         assert result.exit_code == 0
         assert not (out / "metadata.duckdb").exists()
         assert not (out / "metrics.duckdb").exists()
 
-    def test_embeds_dcc_metadata_in_parquet(self, tmp_path):
+    def test_embeds_dcc_metadata_in_parquet(self, tmp_path, raw_xlsx):
         """Ingested Parquet has dcc_metadata key with a 6-char hex parquet_id."""
         raw = tmp_path / "raw"
-        raw.mkdir()
-        _write_raw_xlsx(raw / "trip.xlsx")
+        raw_xlsx(raw / "trip.xlsx")
         result = runner.invoke(app, ["ingest", str(raw), str(tmp_path / "out")])
         assert result.exit_code == 0
         parquets = list((tmp_path / "out" / "trips").glob("*.parquet"))
@@ -58,11 +36,10 @@ class TestCliIngest:
         assert len(meta.parquet_id) == 6
         assert all(c in "0123456789abcdef" for c in meta.parquet_id)
 
-    def test_reads_user_metadata_from_yaml(self, tmp_path):
+    def test_reads_user_metadata_from_yaml(self, tmp_path, raw_xlsx):
         """With metadata-<folder>.yaml present, user fields are embedded in every Parquet."""
         raw = tmp_path / "raw"
-        raw.mkdir()
-        _write_raw_xlsx(raw / "trip.xlsx")
+        raw_xlsx(raw / "trip.xlsx")
         (raw / f"metadata-{raw.name}.yaml").write_text(
             "user: alice\nfuel_type: diesel\n", encoding="utf-8"
         )
@@ -74,11 +51,10 @@ class TestCliIngest:
         assert meta.user_metadata.user == "alice"
         assert meta.user_metadata.fuel_type == "diesel"
 
-    def test_proceeds_without_metadata_yaml(self, tmp_path):
+    def test_proceeds_without_metadata_yaml(self, tmp_path, raw_xlsx):
         """Ingest succeeds when no metadata yaml is present; user fields are all None."""
         raw = tmp_path / "raw"
-        raw.mkdir()
-        _write_raw_xlsx(raw / "trip.xlsx")
+        raw_xlsx(raw / "trip.xlsx")
         result = runner.invoke(app, ["ingest", str(raw), str(tmp_path / "out")])
         assert result.exit_code == 0
         parquets = list((tmp_path / "out" / "trips").glob("*.parquet"))

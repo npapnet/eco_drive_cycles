@@ -18,14 +18,15 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from drive_cycle_calculator._schema import CURATED_COLS
 from drive_cycle_calculator.gps_time_parser import GpsTimeParser
+from drive_cycle_calculator.schema import CURATED_COLS
 
 logger = logging.getLogger(__name__)
 
 
 if TYPE_CHECKING:
-    from drive_cycle_calculator.schema import ProcessingConfig, UserMetadata
+    from drive_cycle_calculator.processing_config import ProcessingConfig
+    from drive_cycle_calculator.schema import UserMetadata
     from drive_cycle_calculator.trip import Trip
 
 # Parquet format version written to PyArrow schema metadata.
@@ -72,6 +73,14 @@ class OBDFile:
         self.name = name
         self._strict = strict
 
+        # there are some commmon columns that are often imported as str
+        # (e.g. Speed (OBD)(km/h)) due to Torque's use of "-" placeholders.
+        for col in ["Speed (OBD)(km/h)", "Engine Load(%)", "Engine RPM(rpm)"]:
+            try:
+                self._df[col] = pd.to_numeric(self._df[col], errors="coerce")
+            except KeyError:
+                logger.warning("'%s' column is missing from %s", col, name)
+
         # Fuel unit fallbacks
         if "Fuel flow rate/hour(l/hr)" not in self._df.columns:
             logger.warning("'Fuel flow rate/hour(l/hr)' column is missing from %s", name)
@@ -94,6 +103,9 @@ class OBDFile:
 
         self._validate_columns()
 
+        # check for unreasonable values
+        self._check_speed_max()
+
     def _validate_columns(self) -> None:
         missing_cols = set(CURATED_COLS) - set(self._df.columns)
         if not missing_cols:
@@ -103,7 +115,28 @@ class OBDFile:
         # Permissive: inject NaN columns so curated_df always has the expected shape.
         for col in missing_cols:
             self._df[col] = float("nan")
-        logger.warning("Missing curated columns %s in %s — NaN columns injected.", missing_cols, self.name)
+        logger.warning(
+            "Missing curated columns %s in %s — NaN columns injected.", missing_cols, self.name
+        )
+
+    def _check_speed_max(self):
+        """Check that "Speed (OBD)(km/h)" column is not unreasonable.
+
+        why: some resuls reported OBD speed max of 3e38 km/h, probably due to a
+        sensor glitch during the trip. The threshold is set to 300 km/h.
+
+        Drop all the values in that range, which are likely noise.
+
+        """
+        max_speed = self._df["Speed (OBD)(km/h)"].max()
+        OBD_MAX_THRESHOLD = 300
+        if max_speed > OBD_MAX_THRESHOLD:
+            logger.warning(
+                "Max speed is unreasonable: %f km/h. Dropping values > %dkm/h",
+                max_speed,
+                OBD_MAX_THRESHOLD,
+            )
+            self._df = self._df[self._df["Speed (OBD)(km/h)"] <= OBD_MAX_THRESHOLD]
 
     def _compute_parquet_id(self) -> str:
         """6-char hex hash of GPS lat+lon bytes, or name-hash fallback."""
@@ -127,7 +160,9 @@ class OBDFile:
         end_time = valid.iloc[-1].to_pydatetime() if not valid.empty else None
 
         lat_col = self._df["Latitude"] if "Latitude" in self._df.columns else pd.Series(dtype=float)
-        lon_col = self._df["Longitude"] if "Longitude" in self._df.columns else pd.Series(dtype=float)
+        lon_col = (
+            self._df["Longitude"] if "Longitude" in self._df.columns else pd.Series(dtype=float)
+        )
 
         n_lat = lat_col.dropna().__len__()
 
@@ -323,9 +358,7 @@ class OBDFile:
 
         start_ts: pd.Timestamp = start_dt.iloc[0]
         end_dt = parser.to_datetime(raw_valid.iloc[[-1]]).dropna()
-        duration_s = (
-            int((end_dt.iloc[0] - start_ts).total_seconds()) if not end_dt.empty else 0
-        )
+        duration_s = int((end_dt.iloc[0] - start_ts).total_seconds()) if not end_dt.empty else 0
         stamp = start_ts.strftime("%Y%m%d-%H%M%S")
         hash6 = self._compute_parquet_id()
         return f"t{stamp}-{duration_s}-{hash6}"
@@ -444,6 +477,7 @@ class OBDFile:
             df=processed_df,
             name=self.parquet_name,
             stop_threshold_kmh=config.stop_threshold_kmh,
+            parquet_id=self._compute_parquet_id(),
         )
 
     # end region
