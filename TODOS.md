@@ -1,21 +1,6 @@
 # Immediate Next Steps
 
-## P1 - Add `dcc ingest` command
-
-**Motivation**: when ingesting the same files, I was expecting that the existing files will be overwritten, however this was not the case 
-
-
-**PROPOSAL**: add swithes --safe, --force? and add a warning message if the file exists:
-- When safe(default ?), the ingest command will check if the file exists and if it does, it will skip it(ask user to confirm?). 
-- When force, the ingest command will overwrite the file. I am leaning towards this behavior.
-
-
 # Backlog
-
-## P2 - Add `dcc clean` command
-
-clean the trip catalog and metadata. The user can specify the path to the catalog and metadata.
-
 
 ## P2 - revisit cli commands workflow 
 
@@ -30,8 +15,7 @@ The current workflow is:
 
 **Issues identified with the current workflow:**
 
-1. ~~**Ingest**: when ingesting the same files, I was expecting that the existing files will be overwritten, however this was not the case (add swithes --safe, --force? and add a warning message if the file exists )~~
-2. **extract** could use a filter with the name of the user. 
+1. **extract** could use a filter with the name of the user. 
 3. **analyse**: only outputs to the console. It would be better to have an option to output to a file. It was unclear which db or set of data it used. 
 4. **gui**:
     - The gui during analysis tried to load files and could not ( reporte to hte console something like `<path>\drive_cycle_calculator\cli\gui.py:137: UserWarning: Trip 't20250813-092120-384-3bdac5': cannot load '<path to repo>>\\data\\trips\\t20250813-092120-384-3bdac5.parquet' — File not found: <path to repo>\data\trips\t20250813-092120-384-3bdac5.parquet. Skipping.`)
