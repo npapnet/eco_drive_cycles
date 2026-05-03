@@ -16,6 +16,8 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
+from drive_cycle_calculator.similarity import SimilarityMeasure, pct_deviation
+
 if TYPE_CHECKING:
     from drive_cycle_calculator.obd_file import OBDFile
     from drive_cycle_calculator.processing_config import ProcessingConfig
@@ -231,8 +233,17 @@ class TripCollection:
 
     # ── Analysis ─────────────────────────────────────────────────────────────
 
-    def similarity_scores(self) -> dict[str, float]:
-        """Mean similarity score (0–100) per trip name.
+    def similarity_scores(
+        self, measure: SimilarityMeasure = pct_deviation
+    ) -> dict[str, float]:
+        """Similarity score per trip name using the given measure.
+
+        Parameters
+        ----------
+        measure : SimilarityMeasure
+            Callable with signature (fleet, trip) → float, where fleet is the
+            (n_trips, n_metrics) collection matrix and trip is a (n_metrics,)
+            vector. Defaults to pct_deviation.
 
         Raises
         ------
@@ -241,17 +252,19 @@ class TripCollection:
         """
         if not self.trips:
             raise ValueError("Cannot compute similarity scores: collection is empty.")
-        per = {t.name: t.metrics for t in self.trips}
-        overall = {k: float(np.nanmean([m[k] for m in per.values()])) for k in _SEVEN_METRIC_KEYS}
+        fleet = np.array([[t.metrics[k] for k in _SEVEN_METRIC_KEYS] for t in self.trips])
         return {
-            t.name: float(
-                np.nanmean([similarity(overall[k], t.metrics[k]) for k in _SEVEN_METRIC_KEYS])
-            )
+            t.name: measure(fleet, np.array([t.metrics[k] for k in _SEVEN_METRIC_KEYS]))
             for t in self.trips
         }
 
-    def find_representative(self) -> "Trip":
-        """Return the trip most similar to the collection average (7-metric scoring).
+    def find_representative(self, measure: SimilarityMeasure = pct_deviation) -> "Trip":
+        """Return the trip most similar to the collection average.
+
+        Parameters
+        ----------
+        measure : SimilarityMeasure
+            Similarity measure to use. Defaults to pct_deviation.
 
         Raises
         ------
@@ -260,7 +273,7 @@ class TripCollection:
         """
         if not self.trips:
             raise ValueError("Cannot find representative trip: collection is empty.")
-        scores = self.similarity_scores()
+        scores = self.similarity_scores(measure=measure)
         best_name = max(scores, key=scores.__getitem__)
         return next(t for t in self.trips if t.name == best_name)
 
@@ -276,13 +289,3 @@ class TripCollection:
         return f"TripCollection({len(self.trips)} trips)"
 
 
-def similarity(overall_val: float, rep_val: float) -> float:
-    """% similarity between a representative value and the overall mean.
-
-    Returns a value in [0, 100]. Perfect match returns 100.0.
-    """
-    if np.isnan(overall_val):
-        return 0.0
-    if overall_val == 0:
-        return 100.0 if rep_val == 0 else 0.0
-    return max(0.0, 100.0 - abs(rep_val - overall_val) / abs(overall_val) * 100)
