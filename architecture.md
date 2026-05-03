@@ -189,7 +189,7 @@ via `ProcessingConfig.apply()`.
 | Subcommand | Status | Description |
 |---|---|---|
 | `dcc config-init <folder>` | New (v0.3) | Write `metadata-<folder>.yaml` template |
-| `dcc ingest <raw_dir> <out_dir>` | Revised (v0.3) | Raw → archive Parquet. No DuckDB. |
+| `dcc ingest <raw_dir> <out_dir> [--force]` | Revised (v0.3) | Raw → archive Parquet. No DuckDB. Skips existing files by default; `--force` overwrites. |
 | `dcc extract <data_dir>` | New (v0.3) | Parquets → DuckDB / CSV / XLSX with metrics |
 | `dcc analyze <data_dir>` | Unchanged | Similarity analysis from DuckDB |
 | `dcc gui` | Bug-fix (v0.3) | Uses `parquet_name` scheme |
