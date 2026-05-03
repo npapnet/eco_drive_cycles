@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+- `dcc ingest` — existing archive Parquets are now skipped by default with a yellow
+  `EXISTS` warning and a collision count in the summary. Pass `--force` to overwrite.
+  The `--format` / `-f` short alias is unchanged; `--force` has no short alias.
+
 ## [0.4.0] - 2026-05-03
 
 ### Added

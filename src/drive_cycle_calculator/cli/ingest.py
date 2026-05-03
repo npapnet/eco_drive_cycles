@@ -39,6 +39,11 @@ def ingest(
         None,
         help="CSV decimal separator (e.g. '.' or ','). Overrides metadata yaml value.",
     ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Overwrite existing archive Parquets. Default: skip files that already exist.",
+    ),
 ) -> None:
     archive_dir = out_dir / "trips"
     archive_dir.mkdir(parents=True, exist_ok=True)
@@ -102,7 +107,7 @@ def ingest(
 
     typer.echo(f"  Found {len(files)} raw file(s).")
 
-    ok = skipped = 0
+    ok = skipped = collisions = 0
     for f in sorted(files):
         try:
             obd = OBDFile.from_file(f, sep=resolved_sep, decimal=resolved_decimal)
@@ -112,10 +117,22 @@ def ingest(
             continue
 
         dest = archive_dir / f"{obd.parquet_name}.parquet"
+        if dest.exists():
+            if not force:
+                typer.secho(
+                    f"  EXISTS {f.name} → {dest.name}  (skipped — use --force to overwrite)",
+                    fg=typer.colors.YELLOW,
+                )
+                collisions += 1
+                continue
+            typer.secho(f"  OVERWRITE {dest.name}", fg=typer.colors.YELLOW)
+
         obd.to_parquet(dest, user_metadata=user_metadata)
         ok += 1
         typer.secho(f"  OK     {f.name} → {dest.name}", fg=typer.colors.GREEN)
 
-    typer.echo(f"\n  Archived {ok} trip(s), skipped {skipped}.")
+    typer.echo(f"\n  Archived {ok} trip(s), {collisions} skipped (already exist), {skipped} failed.")
+    if collisions:
+        typer.secho("  Tip: re-run with --force to overwrite existing files.", fg=typer.colors.YELLOW)
     if ok:
         typer.secho("Done. Run 'dcc extract' to compute metrics.", fg=typer.colors.GREEN)
