@@ -2,6 +2,24 @@
 
 # Backlog
 
+## P2 — Reassess the role of DuckDB in the pipeline
+
+**Question:** Is DuckDB still the right persistence layer, or should the pipeline be simplified?
+
+**Context:** The original motivation was a persistent catalog of trip metrics for fast querying without reprocessing Parquets. In practice:
+- `dcc extract` already exports metrics to CSV or XLSX (not just DuckDB), so the metrics are available in open formats without a database.
+- `dcc analyze` uses DuckDB only as a lookup table to find Parquet paths, then re-reads the Parquets anyway — so DuckDB adds a round-trip with no data benefit at current scale.
+- `dcc ingest` was explicitly decoupled from DuckDB (no catalog write at ingest time), which further reduces DuckDB's role.
+- The `examples/workflow/` scripts exposed this: `02_extract_analyze.py` could skip the DuckDB round-trip in the analyze phase and call `TripCollection.from_archive_parquets()` directly.
+
+**Investigate:**
+1. Is there any scenario at current or expected scale where the DuckDB catalog provides a real benefit over loading Parquets directly?
+2. Should `dcc analyze` accept a `trips/` folder directly instead of requiring a `metrics.duckdb`?
+3. Should DuckDB be demoted to an optional output format of `dcc extract` (alongside CSV/XLSX) rather than being a required intermediate step for `dcc analyze`?
+4. Does the planned Supabase migration (see below) change the answer?
+
+---
+
 ## P2 - revisit cli commands workflow 
 
 Why: Ladikas data processing indicated problems with the current workflow. 
