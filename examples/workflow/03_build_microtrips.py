@@ -1,3 +1,4 @@
+# %%
 """
 Step 3 — Segment trips into microtrips and save to disk.
 
@@ -23,9 +24,10 @@ from drive_cycle_calculator.schema import SegmentationConfig
 from drive_cycle_calculator.segmentation import MicrotripSegmenter
 
 # ── Configuration ─────────────────────────────────────────────────────────────
+ROOTDIR = Path(__file__).parents[2]
 
-OUTPUT_DIR = Path("data")         # must contain a trips/ sub-folder of Parquets
-
+OUTPUT_DIR = ROOTDIR / "data"  # must contain a trips/ sub-folder of Parquets
+# %%
 PROCESSING_CONFIG = ProcessingConfig(window=4, stop_threshold_kmh=2.0)
 
 SEGMENTATION_CONFIG = SegmentationConfig(
@@ -76,8 +78,11 @@ for p in parquets:
         dest = microtrips_dir / f"{p.stem}_mt{i:02d}.parquet"
         combined.to_parquet(dest, index=False)
 
-        duration = float(mt.samples["elapsed_s"].iloc[-1] - mt.samples["elapsed_s"].iloc[0]) \
-            if "elapsed_s" in mt.samples.columns and len(mt.samples) >= 2 else float(len(mt.samples))
+        duration = (
+            float(mt.samples["elapsed_s"].iloc[-1] - mt.samples["elapsed_s"].iloc[0])
+            if "elapsed_s" in mt.samples.columns and len(mt.samples) >= 2
+            else float(len(mt.samples))
+        )
         speed = mt.samples.get("smooth_speed_kmh", mt.samples.get("speed_kmh"))
         mean_speed = float(speed.mean()) if speed is not None else float("nan")
 
@@ -106,3 +111,5 @@ pd.DataFrame(summary_rows).to_csv(summary_path, index=False)
 
 print(f"\nDone: {total} microtrip(s) saved to {microtrips_dir}/")
 print(f"  Summary: {summary_path}")
+
+# %%

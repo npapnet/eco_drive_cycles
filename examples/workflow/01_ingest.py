@@ -1,3 +1,4 @@
+# %%
 """
 Step 1 — Ingest raw OBD files into v2 archive Parquets.
 
@@ -16,10 +17,10 @@ from drive_cycle_calculator.schema import UserMetadata
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
-DATA_DIR = Path("raw_data")       # folder with raw OBD exports (.xlsx / .csv)
-OUTPUT_DIR = Path("data")         # archive Parquets go to OUTPUT_DIR/trips/
+DATA_DIR = Path("raw_data")  # folder with raw OBD exports (.xlsx / .csv)
+OUTPUT_DIR = Path("data")  # archive Parquets go to OUTPUT_DIR/trips/
 
-FORCE = False                     # set True to overwrite existing Parquets
+FORCE = False  # set True to overwrite existing Parquets
 
 # Optional: fill in known vehicle details (leave None for unknown).
 USER_METADATA = UserMetadata(
@@ -31,7 +32,7 @@ USER_METADATA = UserMetadata(
     fuel_type=None,
     vehicle_category=None,
 )
-
+# %%
 # ── Setup ──────────────────────────────────────────────────────────────────────
 
 archive_dir = OUTPUT_DIR / "trips"

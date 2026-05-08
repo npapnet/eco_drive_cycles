@@ -21,12 +21,12 @@ Equivalent CLI: `uv run dcc ingest <DATA_DIR> <OUTPUT_DIR>`
 
 ### `02_extract_analyze.py` — Metrics + Similarity Report
 
-Reads archive Parquets from `OUTPUT_DIR/trips/`, computes per-trip metrics
-into `OUTPUT_DIR/metrics.duckdb`, then runs 7-metric similarity scoring and
+Reads archive Parquets from `data/trips/`, computes per-trip metrics
+into `data/metrics.duckdb`, then runs 7-metric similarity scoring and
 writes:
 
-- `OUTPUT_DIR/analyses/dcca-<timestamp>/similarity_scores.csv`
-- `OUTPUT_DIR/analyses/dcca-<timestamp>/report.md`
+- `data/analyses/dcca-<timestamp>/similarity_scores.csv`
+- `data/analyses/dcca-<timestamp>/report.md`
 
 ```bash
 uv run python examples/workflow/02_extract_analyze.py

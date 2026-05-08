@@ -1,3 +1,4 @@
+# %%
 """
 Step 2 — Extract trip metrics and run similarity analysis.
 
@@ -22,8 +23,10 @@ from drive_cycle_calculator.schema import ParquetMetadata
 from drive_cycle_calculator.trip_collection import TripCollection
 
 # ── Configuration ─────────────────────────────────────────────────────────────
+# set the root dir to repo root.
+ROOTDIR = Path(__file__).parents[2]
 
-OUTPUT_DIR = Path("data")         # must contain a trips/ sub-folder of Parquets
+OUTPUT_DIR = ROOTDIR / "data"  # must contain a trips/ sub-folder of Parquets
 
 PROCESSING_CONFIG = ProcessingConfig(window=4, stop_threshold_kmh=2.0)
 
@@ -39,7 +42,7 @@ if not trips_dir.is_dir():
 
 parquets = sorted(trips_dir.glob("*.parquet"))
 print(f"Found {len(parquets)} parquet file(s) in {trips_dir}.")
-
+# %%
 # ── Extract: compute metrics → DuckDB ────────────────────────────────────────
 
 rows: list[dict] = []
@@ -206,3 +209,5 @@ with md_path.open("w", encoding="utf-8") as fh:
 
 print(f"\nOutput written to {out_dir}")
 print("  Next: run 03_microtrips.py")
+
+# %%
