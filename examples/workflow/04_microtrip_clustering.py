@@ -88,4 +88,57 @@ FIGS_DIR.mkdir(exist_ok=True, parents=True)
 g.savefig(FIGS_DIR / "microtrip_clusters_pairplot.png", dpi=300)
 # %%
 # ── Cluster summary ────────────────────────────────────────────────────────────
-df.groupby("cluster")[FEATURES].mean().round(2)
+cluster_sizes = df.groupby("cluster").size().rename("count")
+cluster_mean = df.groupby("cluster")[FEATURES].mean().round(3)
+cluster_std = df.groupby("cluster")[FEATURES].std().round(3)
+
+print(f"\nItems per cluster:\n{cluster_sizes.to_string()}")
+print(f"\nCluster means:\n{cluster_mean.to_string()}")
+
+# %%
+# ── Markdown report ────────────────────────────────────────────────────────────
+
+def _mean_std_table(mean_df: pd.DataFrame, std_df: pd.DataFrame) -> str:
+    clusters = mean_df.index.tolist()
+    header = "| Feature | " + " | ".join(f"Cluster {c}" for c in clusters) + " |"
+    sep    = "| --- | " + " | ".join("---" for _ in clusters) + " |"
+    rows = [header, sep]
+    for feat in mean_df.columns:
+        cells = " | ".join(
+            f"{mean_df.loc[c, feat]:.3f} ± {std_df.loc[c, feat]:.3f}"
+            for c in clusters
+        )
+        rows.append(f"| {feat} | {cells} |")
+    return "\n".join(rows)
+
+
+sizes_table = (
+    "| Cluster | Count |\n| --- | --- |\n"
+    + "\n".join(f"| {c} | {n} |" for c, n in cluster_sizes.items())
+)
+
+report = f"""\
+# Microtrip Clustering Report
+
+## Configuration
+
+- **Features ({len(FEATURES)}):** {", ".join(FEATURES)}
+- **N clusters:** {N_CLUSTERS}
+- **Total microtrips:** {len(df)}
+
+## Cluster sizes
+
+{sizes_table}
+
+## Cluster profiles (mean ± std)
+
+{_mean_std_table(cluster_mean, cluster_std)}
+
+## Pairplot
+
+![Microtrip cluster pairplot](microtrip_clusters_pairplot.png)
+"""
+
+report_path = FIGS_DIR / "microtrip_clusters_report.md"
+report_path.write_text(report, encoding="utf-8")
+print(f"\nReport written to {report_path}")
