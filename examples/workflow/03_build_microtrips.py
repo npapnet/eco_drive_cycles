@@ -10,12 +10,17 @@ motion segments (microtrips), and writes:
 A microtrip is one stop-to-stop motion segment.  The trailing stop is
 included in each segment's parquet (stop_phase column = True).
 
+META_COLS lists identifier columns that are excluded from clustering features
+in 04_microtrip_clustering.py.  Every other column in summary.csv is treated
+as a numeric feature.
+
 See: src/drive_cycle_calculator/segmentation.py
      docs/designs/archive/microtrip_design_spec.md
 """
 
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from drive_cycle_calculator.obd_file import OBDFile
@@ -27,6 +32,10 @@ from drive_cycle_calculator.segmentation import MicrotripSegmenter
 ROOTDIR = Path(__file__).parents[2]
 
 OUTPUT_DIR = ROOTDIR / "data"  # must contain a trips/ sub-folder of Parquets
+
+# Columns that identify a microtrip but are not clustering features.
+# Keep in sync with the same constant in 04_microtrip_clustering.py.
+META_COLS = frozenset({"trip_id", "parquet_id", "microtrip_index", "filename"})
 # %%
 PROCESSING_CONFIG = ProcessingConfig(window=4, stop_threshold_kmh=2.0)
 
@@ -78,29 +87,58 @@ for p in parquets:
         dest = microtrips_dir / f"{p.stem}_mt{i:02d}.parquet"
         combined.to_parquet(dest, index=False)
 
-        duration = (
-            float(mt.samples["elapsed_s"].iloc[-1] - mt.samples["elapsed_s"].iloc[0])
-            if "elapsed_s" in mt.samples.columns and len(mt.samples) >= 2
-            else float(len(mt.samples))
-        )
-        speed = mt.samples.get("smooth_speed_kmh", mt.samples.get("speed_kmh"))
-        mean_speed = float(speed.mean()) if speed is not None else float("nan")
+        df = mt.samples
+
+        # ── Duration ──────────────────────────────────────────────────────────
+        if "elapsed_s" in df.columns and len(df) >= 2:
+            elapsed = pd.to_numeric(df["elapsed_s"], errors="coerce").dropna()
+            duration = float(elapsed.iloc[-1] - elapsed.iloc[0])
+        else:
+            duration = float(len(df))
+
+        # ── Speed ─────────────────────────────────────────────────────────────
+        speed = df.get("smooth_speed_kmh") if "smooth_speed_kmh" in df.columns else df.get("speed_kmh")
+        mean_speed = float(speed.mean()) if speed is not None and not speed.empty else float("nan")
+        max_speed = float(speed.max()) if speed is not None and not speed.empty else float("nan")
+
+        # ── Distance (trapezoidal integration of speed) ────────────────────────
+        if speed is not None and "elapsed_s" in df.columns:
+            elapsed = pd.to_numeric(df["elapsed_s"], errors="coerce")
+            dt = elapsed.diff().fillna(0.0)
+            distance_m = float((pd.to_numeric(speed, errors="coerce").fillna(0.0) / 3.6 * dt).sum())
+        else:
+            distance_m = float("nan")
+
+        # ── Acceleration / deceleration ────────────────────────────────────────
+        if "acc_ms2" in df.columns:
+            acc = pd.to_numeric(df["acc_ms2"], errors="coerce")
+            mean_acc = float(acc.where(acc > 0).mean())   # NaN when no positive values
+            mean_dec = float(acc.where(acc < 0).abs().mean())  # NaN when no negative values
+        else:
+            mean_acc = mean_dec = float("nan")
+
+        # ── Stop percentage ────────────────────────────────────────────────────
+        total_samples = len(df) + len(mt.stop_samples)
+        stop_pct = round(len(mt.stop_samples) / total_samples * 100, 1) if total_samples else float("nan")
 
         summary_rows.append(
             {
+                # ── identifiers (META_COLS) ────────────────────────────────────
                 "trip_id": p.stem,
                 "parquet_id": mt.parquet_id,
                 "microtrip_index": i,
                 "filename": dest.name,
-                "motion_samples": len(mt.samples),
+                # ── features ──────────────────────────────────────────────────
+                "motion_samples": len(df),
                 "stop_samples": len(mt.stop_samples),
                 "duration_s": round(duration, 1),
                 "stop_duration_s": round(mt.stop_duration_after, 1),
+                "distance_m": round(distance_m, 1),
                 "mean_speed_kmh": round(mean_speed, 2),
-                # TODO: add the following
-                #  max speed
-                # max accel
-                # max decel
+                "max_speed_kmh": round(max_speed, 2),
+                "mean_acc_ms2": round(mean_acc, 4),
+                "mean_dec_ms2": round(mean_dec, 4),
+                "stop_pct": stop_pct,
             }
         )
 

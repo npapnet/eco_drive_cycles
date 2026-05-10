@@ -1,64 +1,47 @@
 # %%
 """
-Step 4 — proceesing of microtrips
+Step 4 — Cluster microtrips by their numeric features.
 
-1. Loads the summary csv
-2. Performs microtrip clustering
-3. plots a graph in seaborn(?) which shows different aspect with the differne tclustering. 
-
+1. Loads the summary CSV produced by 03_build_microtrips.py.
+2. Auto-detects feature columns: every column NOT in META_COLS is treated as a
+   numeric feature.  Adding new metrics to 03 automatically includes them here.
+3. Runs the elbow method to help choose N_CLUSTERS.
+4. Fits KMeans and visualises cluster separation via a pairplot.
 """
 
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
 import seaborn as sns
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 
-from drive_cycle_calculator.obd_file import OBDFile
-from drive_cycle_calculator.processing_config import ProcessingConfig
-from drive_cycle_calculator.schema import SegmentationConfig
-from drive_cycle_calculator.segmentation import MicrotripSegmenter
-
 # ── Configuration ─────────────────────────────────────────────────────────────
 ROOTDIR = Path(__file__).parents[2]
 
-OUTPUT_DIR = ROOTDIR / "data"  # must contain a trips/ sub-folder of Parquets
+OUTPUT_DIR = ROOTDIR / "data"
 
-FEATURES = ["motion_samples", "stop_samples", "duration_s", "stop_duration_s", "mean_speed_kmh"]
+# Identifier columns — excluded from clustering features.
+# Keep in sync with the same constant in 03_build_microtrips.py.
+META_COLS = frozenset({"trip_id", "parquet_id", "microtrip_index", "filename"})
+
 N_CLUSTERS = 4  # adjust after inspecting the elbow plot
-# %%
-PROCESSING_CONFIG = ProcessingConfig(window=4, stop_threshold_kmh=2.0)
 
-SEGMENTATION_CONFIG = SegmentationConfig(
-    stop_threshold_kmh=2.0,
-    stop_min_duration_s=1.0,
-    microtrip_min_duration_s=15.0,
-    microtrip_min_distance_m=50.0,
-)
-
-# ── Setup ──────────────────────────────────────────────────────────────────────
-
-trips_dir = OUTPUT_DIR / "trips"
+# ── Load summary ───────────────────────────────────────────────────────────────
 microtrips_dir = OUTPUT_DIR / "microtrips"
+SUMMARY_FILE = microtrips_dir / "summary.csv"
 
-if not trips_dir.is_dir():
-    print(f"No trips/ directory found under {OUTPUT_DIR}.")
-    print("Run 01_ingest.py first.")
-    raise SystemExit(1)
-
-microtrips_dir.mkdir(parents=True, exist_ok=True)
-
-# %%
-SUMMARY_FILE = microtrips_dir/"summary.csv"
 df = pd.read_csv(SUMMARY_FILE)
 # %%
 df.head()
 # %%
 df.columns
 # %%
+# ── Auto-detect feature columns ────────────────────────────────────────────────
+FEATURES = [c for c in df.columns if c not in META_COLS]
+print(f"Feature columns ({len(FEATURES)}): {FEATURES}")
+
 # ── Feature scaling ────────────────────────────────────────────────────────────
 X = df[FEATURES].to_numpy()
 scaler = StandardScaler()
@@ -99,6 +82,10 @@ g = sns.pairplot(
 g.figure.suptitle("Microtrip clusters — pairplot", y=1.02)
 plt.show()
 
+#%%
+FIGS_DIR  = OUTPUT_DIR / "figs"
+FIGS_DIR.mkdir(exist_ok=True, parents=True) 
+g.savefig(FIGS_DIR / "microtrip_clusters_pairplot.png", dpi=300)
 # %%
 # ── Cluster summary ────────────────────────────────────────────────────────────
 df.groupby("cluster")[FEATURES].mean().round(2)
