@@ -97,6 +97,10 @@ for p in parquets:
                 "duration_s": round(duration, 1),
                 "stop_duration_s": round(mt.stop_duration_after, 1),
                 "mean_speed_kmh": round(mean_speed, 2),
+                # TODO: add the following
+                #  max speed
+                # max accel
+                # max decel
             }
         )
 
