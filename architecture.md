@@ -59,7 +59,7 @@ src/drive_cycle_calculator/
 ├── segmentation.py          — SegmentBoundary, detect_boundaries(), build_microtrips(),
 │                              MicrotripSegmenter
 ├── trip.py                  — Trip
-├── trip_collection.py       — TripCollection, similarity(), _SEVEN_METRIC_KEYS
+├── trip_collection.py       — TripCollection, _SEVEN_METRIC_KEYS
 ├── cli/                     — CLI subpackage (Typer)
 │   ├── main.py              — app entry point; registers all sub-apps
 │   ├── config_init.py       — dcc config-init
@@ -67,6 +67,10 @@ src/drive_cycle_calculator/
 │   ├── extract.py           — dcc extract
 │   ├── analyze.py           — dcc analyze
 │   └── gui.py               — dcc gui
+├── similarity/              — pluggable similarity measures subpackage
+│   ├── __init__.py          — re-exports SimilarityMeasure, pct_deviation,
+│   │                          cosine_similarity, z_score_distance
+│   └── measures.py          — SimilarityMeasure Protocol + all implementations
 └── vis/                     — visualisation subpackage (stub, not yet populated)
 ```
 
@@ -125,7 +129,8 @@ Constructors:
 - `from_archive_parquets(path, config)` — loads v2 archive Parquets
 - `from_duckdb_catalog(db_path, config)` — loads from DuckDB catalog (legacy)
 
-Methods: `similarity_scores()`, `find_representative()`.
+Methods: `similarity_scores(measure=pct_deviation)`, `find_representative(measure=pct_deviation)`.
+Both accept any `SimilarityMeasure` (see `similarity/` subpackage). See `docs/similarity/methodology.md`.
 
 ---
 
