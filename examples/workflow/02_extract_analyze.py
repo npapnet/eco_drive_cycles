@@ -9,10 +9,13 @@ produces a Markdown report + CSV in OUTPUT_DIR/analyses/<run>/.
 Equivalent CLI commands:
     uv run dcc extract <OUTPUT_DIR>
     uv run dcc analyze <OUTPUT_DIR>
+
+Configuration is read from config.json in the same directory as this script.
 """
 
 from datetime import datetime
 from pathlib import Path
+import json
 
 import pandas as pd
 import pyarrow.parquet as pq
@@ -22,13 +25,18 @@ from drive_cycle_calculator.processing_config import ProcessingConfig
 from drive_cycle_calculator.schema import ParquetMetadata
 from drive_cycle_calculator.trip_collection import TripCollection
 
-# ── Configuration ─────────────────────────────────────────────────────────────
+# ── Configuration (loaded from config.json) ───────────────────────────────────
 # set the root dir to repo root.
 ROOTDIR = Path(__file__).parents[2]
+_cfg = json.loads((Path(__file__).parent / "config.json").read_text())
 
-OUTPUT_DIR = ROOTDIR / "data"  # must contain a trips/ sub-folder of Parquets
+OUTPUT_DIR = ROOTDIR / _cfg["output_dir"]  # must contain a trips/ sub-folder of Parquets
 
-PROCESSING_CONFIG = ProcessingConfig(window=4, stop_threshold_kmh=2.0)
+_proc = _cfg["processing"]
+PROCESSING_CONFIG = ProcessingConfig(
+    window=_proc["window"],
+    stop_threshold_kmh=_proc["stop_threshold_kmh"],
+)
 
 # ── Setup ──────────────────────────────────────────────────────────────────────
 

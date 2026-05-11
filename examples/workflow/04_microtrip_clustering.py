@@ -7,8 +7,11 @@ Step 4 — Cluster microtrips by their numeric features.
    numeric feature.  Adding new metrics to 03 automatically includes them here.
 3. Runs the elbow method to help choose N_CLUSTERS.
 4. Fits KMeans and visualises cluster separation via a pairplot.
+
+Configuration is read from config.json in the same directory as this script.
 """
 
+import json
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -17,16 +20,23 @@ import seaborn as sns
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 
-# ── Configuration ─────────────────────────────────────────────────────────────
+# ── Configuration (loaded from config.json) ───────────────────────────────────
 ROOTDIR = Path(__file__).parents[2]
+_cfg = json.loads((Path(__file__).parent / "config.json").read_text())
 
-OUTPUT_DIR = ROOTDIR / "data"
+OUTPUT_DIR = ROOTDIR / _cfg["output_dir"]
+
+REPORTS_DIR = OUTPUT_DIR / "reports/"
+REPORTS_DIR.mkdir(exist_ok=True, parents=True)
+
 
 # Identifier columns — excluded from clustering features.
 # Keep in sync with the same constant in 03_build_microtrips.py.
-META_COLS = frozenset({"trip_id", "parquet_id", "microtrip_index", "filename"})
+META_COLS = frozenset(
+    {"trip_id", "parquet_id", "microtrip_index", "filename", "motion_samples", "stop_samples"}
+)
 
-N_CLUSTERS = 4  # adjust after inspecting the elbow plot
+N_CLUSTERS = _cfg["clustering"]["n_clusters"]  # adjust after inspecting the elbow plot
 
 # ── Load summary ───────────────────────────────────────────────────────────────
 microtrips_dir = OUTPUT_DIR / "microtrips"
@@ -71,6 +81,11 @@ plt.tight_layout()
 km = KMeans(n_clusters=N_CLUSTERS, random_state=42, n_init="auto")
 df["cluster"] = km.fit_predict(X_scaled).astype(str)
 
+# ── Save augmented summary to microtrips/ ──────────────────────────────────────
+clustered_path = microtrips_dir / "summary_clustered.csv"
+df.to_csv(clustered_path, index=False)
+print(f"Clustered summary written to {clustered_path}")
+
 # %%
 # ── Pairplot — cluster separation across all feature pairs ─────────────────────
 # plt.figure()
@@ -84,9 +99,7 @@ g.figure.suptitle("Microtrip clusters — pairplot", y=1.02)
 
 
 # %%
-FIGS_DIR = OUTPUT_DIR / "figs"
-FIGS_DIR.mkdir(exist_ok=True, parents=True)
-g.savefig(FIGS_DIR / "microtrip_clusters_pairplot.png", dpi=300)
+g.savefig(REPORTS_DIR / "microtrip_clusters_pairplot.png", dpi=300)
 # %%
 # ── Cluster summary ────────────────────────────────────────────────────────────
 cluster_sizes = df.groupby("cluster").size().rename("count")
@@ -139,7 +152,7 @@ report = f"""\
 ![Microtrip cluster pairplot](microtrip_clusters_pairplot.png)
 """
 
-report_path = FIGS_DIR / "microtrip_clusters_report.md"
+report_path = REPORTS_DIR / "microtrip_clusters_report.md"
 report_path.write_text(report, encoding="utf-8")
 print(f"\nReport written to {report_path}")
 

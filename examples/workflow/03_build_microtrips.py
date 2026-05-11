@@ -14,10 +14,13 @@ META_COLS lists identifier columns that are excluded from clustering features
 in 04_microtrip_clustering.py.  Every other column in summary.csv is treated
 as a numeric feature.
 
+Configuration is read from config.json in the same directory as this script.
+
 See: src/drive_cycle_calculator/segmentation.py
      docs/designs/archive/microtrip_design_spec.md
 """
 
+import json
 from pathlib import Path
 
 import numpy as np
@@ -28,22 +31,30 @@ from drive_cycle_calculator.processing_config import ProcessingConfig
 from drive_cycle_calculator.schema import SegmentationConfig
 from drive_cycle_calculator.segmentation import MicrotripSegmenter
 
-# ── Configuration ─────────────────────────────────────────────────────────────
+# ── Configuration (loaded from config.json) ───────────────────────────────────
 ROOTDIR = Path(__file__).parents[2]
+_cfg = json.loads((Path(__file__).parent / "config.json").read_text())
 
-OUTPUT_DIR = ROOTDIR / "data"  # must contain a trips/ sub-folder of Parquets
+OUTPUT_DIR = ROOTDIR / _cfg["output_dir"]  # must contain a trips/ sub-folder of Parquets
 
 # Columns that identify a microtrip but are not clustering features.
 # Keep in sync with the same constant in 04_microtrip_clustering.py.
-META_COLS = frozenset({"trip_id", "parquet_id", "microtrip_index", "filename"})
+META_COLS = frozenset(
+    {"trip_id", "parquet_id", "microtrip_index", "filename", "motion_samples", "stop_samples"}
+)
 # %%
-PROCESSING_CONFIG = ProcessingConfig(window=4, stop_threshold_kmh=2.0)
+_proc = _cfg["processing"]
+PROCESSING_CONFIG = ProcessingConfig(
+    window=_proc["window"],
+    stop_threshold_kmh=_proc["stop_threshold_kmh"],
+)
 
+_seg = _cfg["segmentation"]
 SEGMENTATION_CONFIG = SegmentationConfig(
-    stop_threshold_kmh=2.0,
-    stop_min_duration_s=1.0,
-    microtrip_min_duration_s=15.0,
-    microtrip_min_distance_m=50.0,
+    stop_threshold_kmh=_seg["stop_threshold_kmh"],
+    stop_min_duration_s=_seg["stop_min_duration_s"],
+    microtrip_min_duration_s=_seg["microtrip_min_duration_s"],
+    microtrip_min_distance_m=_seg["microtrip_min_distance_m"],
 )
 
 # ── Setup ──────────────────────────────────────────────────────────────────────
@@ -132,9 +143,9 @@ for p in parquets:
                 "parquet_id": mt.parquet_id,
                 "microtrip_index": i,
                 "filename": dest.name,
-                # ── features ──────────────────────────────────────────────────
                 "motion_samples": len(df),
                 "stop_samples": len(mt.stop_samples),
+                # ── features ──────────────────────────────────────────────────
                 "duration_s": round(duration, 1),
                 "stop_duration_s": round(mt.stop_duration_after, 1),
                 "distance_m": round(distance_m, 1),

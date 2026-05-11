@@ -4,23 +4,29 @@ Step 1 — Ingest raw OBD files into v2 archive Parquets.
 
 Reads every .xlsx / .xls / .csv from DATA_DIR and writes one archive
 Parquet per trip into OUTPUT_DIR/trips/.  Skips files that already
-exist (delete the destination or set FORCE = True to re-run).
+exist (delete the destination or set force_reingest = true in config.json
+to overwrite).
 
 Equivalent CLI command:
     uv run dcc ingest <DATA_DIR> <OUTPUT_DIR>
+
+Configuration is read from config.json in the same directory as this script.
 """
 
+import json
 from pathlib import Path
 
 from drive_cycle_calculator.obd_file import OBDFile
 from drive_cycle_calculator.schema import UserMetadata
 
-# ── Configuration ─────────────────────────────────────────────────────────────
+# ── Configuration (loaded from config.json) ───────────────────────────────────
 
-DATA_DIR = Path("raw_data") / "2019-opsimoulis"  # folder with raw OBD exports (.xlsx / .csv)
-OUTPUT_DIR = Path("data")  # archive Parquets go to OUTPUT_DIR/trips/
+ROOTDIR = Path(__file__).parents[2]  # repo root
+_cfg = json.loads((Path(__file__).parent / "config.json").read_text())
 
-FORCE = False  # set True to overwrite existing Parquets
+DATA_DIR = ROOTDIR / _cfg["data_dir"]       # folder with raw OBD exports (.xlsx / .csv)
+OUTPUT_DIR = ROOTDIR / _cfg["output_dir"]   # archive Parquets go to OUTPUT_DIR/trips/
+FORCE = _cfg.get("force_reingest", False)   # overwrite existing Parquets?
 
 # Optional: fill in known vehicle details (leave None for unknown).
 USER_METADATA = UserMetadata(
