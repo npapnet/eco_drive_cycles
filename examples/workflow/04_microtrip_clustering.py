@@ -64,7 +64,7 @@ ax.set_title("Elbow Method — KMeans on microtrip features")
 ax.axvline(N_CLUSTERS, color="red", linestyle="--", alpha=0.5, label=f"chosen k={N_CLUSTERS}")
 ax.legend()
 plt.tight_layout()
-plt.show()
+# plt.show()
 
 # %%
 # ── Fit KMeans ─────────────────────────────────────────────────────────────────
@@ -73,6 +73,7 @@ df["cluster"] = km.fit_predict(X_scaled).astype(str)
 
 # %%
 # ── Pairplot — cluster separation across all feature pairs ─────────────────────
+# plt.figure()
 g = sns.pairplot(
     df[FEATURES + ["cluster"]],
     hue="cluster",
@@ -80,11 +81,11 @@ g = sns.pairplot(
     plot_kws={"alpha": 0.5, "s": 20},
 )
 g.figure.suptitle("Microtrip clusters — pairplot", y=1.02)
-plt.show()
 
-#%%
-FIGS_DIR  = OUTPUT_DIR / "figs"
-FIGS_DIR.mkdir(exist_ok=True, parents=True) 
+
+# %%
+FIGS_DIR = OUTPUT_DIR / "figs"
+FIGS_DIR.mkdir(exist_ok=True, parents=True)
 g.savefig(FIGS_DIR / "microtrip_clusters_pairplot.png", dpi=300)
 # %%
 # ── Cluster summary ────────────────────────────────────────────────────────────
@@ -98,23 +99,22 @@ print(f"\nCluster means:\n{cluster_mean.to_string()}")
 # %%
 # ── Markdown report ────────────────────────────────────────────────────────────
 
+
 def _mean_std_table(mean_df: pd.DataFrame, std_df: pd.DataFrame) -> str:
     clusters = mean_df.index.tolist()
     header = "| Feature | " + " | ".join(f"Cluster {c}" for c in clusters) + " |"
-    sep    = "| --- | " + " | ".join("---" for _ in clusters) + " |"
+    sep = "| --- | " + " | ".join("---" for _ in clusters) + " |"
     rows = [header, sep]
     for feat in mean_df.columns:
         cells = " | ".join(
-            f"{mean_df.loc[c, feat]:.3f} ± {std_df.loc[c, feat]:.3f}"
-            for c in clusters
+            f"{mean_df.loc[c, feat]:.3f} ± {std_df.loc[c, feat]:.3f}" for c in clusters
         )
         rows.append(f"| {feat} | {cells} |")
     return "\n".join(rows)
 
 
-sizes_table = (
-    "| Cluster | Count |\n| --- | --- |\n"
-    + "\n".join(f"| {c} | {n} |" for c, n in cluster_sizes.items())
+sizes_table = "| Cluster | Count |\n| --- | --- |\n" + "\n".join(
+    f"| {c} | {n} |" for c, n in cluster_sizes.items()
 )
 
 report = f"""\
@@ -142,3 +142,5 @@ report = f"""\
 report_path = FIGS_DIR / "microtrip_clusters_report.md"
 report_path.write_text(report, encoding="utf-8")
 print(f"\nReport written to {report_path}")
+
+plt.show()

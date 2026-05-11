@@ -17,7 +17,7 @@ from drive_cycle_calculator.schema import UserMetadata
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
-DATA_DIR = Path("raw_data")  # folder with raw OBD exports (.xlsx / .csv)
+DATA_DIR = Path("raw_data") / "2019-opsimoulis"  # folder with raw OBD exports (.xlsx / .csv)
 OUTPUT_DIR = Path("data")  # archive Parquets go to OUTPUT_DIR/trips/
 
 FORCE = False  # set True to overwrite existing Parquets

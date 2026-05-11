@@ -97,7 +97,9 @@ for p in parquets:
             duration = float(len(df))
 
         # ── Speed ─────────────────────────────────────────────────────────────
-        speed = df.get("smooth_speed_kmh") if "smooth_speed_kmh" in df.columns else df.get("speed_kmh")
+        speed = (
+            df.get("smooth_speed_kmh") if "smooth_speed_kmh" in df.columns else df.get("speed_kmh")
+        )
         mean_speed = float(speed.mean()) if speed is not None and not speed.empty else float("nan")
         max_speed = float(speed.max()) if speed is not None and not speed.empty else float("nan")
 
@@ -112,14 +114,16 @@ for p in parquets:
         # ── Acceleration / deceleration ────────────────────────────────────────
         if "acc_ms2" in df.columns:
             acc = pd.to_numeric(df["acc_ms2"], errors="coerce")
-            mean_acc = float(acc.where(acc > 0).mean())   # NaN when no positive values
+            mean_acc = float(acc.where(acc > 0).mean())  # NaN when no positive values
             mean_dec = float(acc.where(acc < 0).abs().mean())  # NaN when no negative values
         else:
             mean_acc = mean_dec = float("nan")
 
         # ── Stop percentage ────────────────────────────────────────────────────
         total_samples = len(df) + len(mt.stop_samples)
-        stop_pct = round(len(mt.stop_samples) / total_samples * 100, 1) if total_samples else float("nan")
+        stop_pct = (
+            round(len(mt.stop_samples) / total_samples * 100, 1) if total_samples else float("nan")
+        )
 
         summary_rows.append(
             {

@@ -1,5 +1,50 @@
 # Immediate Next Steps
 
+## P1 — Resampling and gap-check during ingestion
+
+**What:** In `dcc ingest` (and `OBDFile.to_parquet`), resample raw data to a fixed 1s frequency before saving to Parquet. Add an adjustable `max_gap_s` check (default 5s). If a time gap exceeds this threshold, either issue a warning or abort the conversion based on a CLI flag.
+
+**Why:** Raw OBD data often has irregular sampling. Resampling to 1s ensures a uniform time base for all downstream calculations. Gaps in data indicate sensor loss or engine restarts, which should be flagged to the user.
+
+**Where:** `src/drive_cycle_calculator/obd_file.py` and `src/drive_cycle_calculator/cli/ingest.py`.
+
+**Effort:** S
+
+## P1 — Modular in-place workflow (single-argument ingest)
+
+**What:** Modify `dcc ingest` (and potentially other commands) to support a modular, in-place workflow. The `ingest` command should accept a single directory argument. If only one argument is provided, it should use that directory for both input (raw data) and output (creating `trips/`, `microtrips/`, and reports subfolders within it).
+
+**Why:** The current requirement for separate input and output directories is a legacy of a centralized repository model. A more modular approach allows researchers to keep processed artifacts alongside their raw data source.
+
+**Where:** `src/drive_cycle_calculator/cli/ingest.py` and `src/drive_cycle_calculator/cli/main.py`.
+
+**Effort:** S
+
+## P1 — Representative microtrip selection per cluster
+
+**What:** For each cluster identified in the clustering phase, find the single most representative microtrip using the new `SimilarityMeasure` (cosine similarity, etc.) from the core library.
+
+**Why:** Finding the representative sample for each cluster allows for synthetic cycle construction and provides a "canonical" example of that driving behavior.
+
+**Where:** `examples/workflow/05_microtrip_visulisation.py`.
+
+**Effort:** S
+
+## P1 — v-a density cloud and canonical profile visualisation
+
+**What:** Implement advanced visualisations for cluster analysis:
+1. **v-a Density Cloud**: Create a 2D density plot (KDE2D or Hexbin) of Speed vs. Acceleration for all samples in the dataset, color-coded or faceted by cluster.
+2. **Canonical Microtrips**: Plot the time-series speed profiles of the representative microtrips for each cluster.
+
+**Why:** Clustering needs visual validation. Joint velocity-acceleration (v-a) probability density matrices (or "clouds") are the industry standard for drive cycle "fingerprinting" and representativeness validation (e.g., André 2004, Ericsson 2001). Unlike v-t (speed-time) profiles which show individual events, v-a clouds capture the aggregate statistical "signature" of the driving behavior. Standard scatter plots become unreadable with large datasets.
+
+**Performance Consideration:** With large datasets (thousands of microtrips), KDE plots and pairwise similarity can be computationally expensive. Use sampling or efficient binning (e.g., `datashader` or `hexbin`) for the v-a cloud. Plan carefully
+
+**Where:** `examples/workflow/05_microtrip_visulisation.py` 
+
+**Effort:** M
+
+
 # Backlog
 
 ## P2 — Reassess the role of DuckDB in the pipeline
