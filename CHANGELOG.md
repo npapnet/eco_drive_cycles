@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- `examples/workflow/060_select_representatives.py` — script to rank microtrips within clusters using similarity measures and visualize the top N candidates per cluster.
+
 ### Changed
 - `dcc ingest` — existing archive Parquets are now skipped by default with a yellow
   `EXISTS` warning and a collision count in the summary. Pass `--force` to overwrite.

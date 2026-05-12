@@ -1,5 +1,7 @@
 # Immediate Next Steps
 
+
+
 ## P1 — Resampling and gap-check during ingestion
 
 **What:** In `dcc ingest` (and `OBDFile.to_parquet`), resample raw data to a fixed 1s frequency before saving to Parquet. Add an adjustable `max_gap_s` check (default 5s). If a time gap exceeds this threshold, either issue a warning or abort the conversion based on a CLI flag.
@@ -9,6 +11,17 @@
 **Where:** `src/drive_cycle_calculator/obd_file.py` and `src/drive_cycle_calculator/cli/ingest.py`.
 
 **Effort:** S
+
+## P1 — Check what is saved into each microtrip parquet
+
+**What:** Check what is saved into each microtrip parquet file? Are all data from the trip saved or just the CURATED data.
+
+**Why:** The microtrips are an intermediate step of the analysis, and so, only specific columns are needed for downstream analysis. This will save space and time, as there are many trips to be processed. Additionally this will help because it will make the columns more predictable and not dependent on the columns available in the original data.
+
+**Where:** `src/drive_cycle_calculator/microtrip_segmenter.py`.
+
+**Effort:** ?
+
 
 ## P1 — Modular in-place workflow (single-argument ingest)
 
@@ -20,15 +33,7 @@
 
 **Effort:** S
 
-## P1 — Representative microtrip selection per cluster
-
-**What:** For each cluster identified in the clustering phase, find the single most representative microtrip using the new `SimilarityMeasure` (cosine similarity, etc.) from the core library.
-
-**Why:** Finding the representative sample for each cluster allows for synthetic cycle construction and provides a "canonical" example of that driving behavior.
-
-**Where:** `examples/workflow/05_microtrip_visulisation.py`.
-
-**Effort:** S
+# DONE IN THIS ITERATION 
 
 ## P1 — v-a density cloud and canonical profile visualisation
 
