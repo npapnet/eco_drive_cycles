@@ -44,7 +44,7 @@ if not summary_path.exists():
     raise SystemExit(1)
 
 df_summary = pd.read_csv(summary_path)
-available_clusters = sorted(df_summary["cluster"].unique())
+available_clusters = sorted(df_summary["cluster_id"].unique())
 
 if CLUSTER_IDS is None:
     clusters_to_plot = available_clusters
@@ -64,9 +64,9 @@ colors = plt.cm.tab10.colors
 cluster_stats = []
 
 for i, cid in enumerate(clusters_to_plot):
-    cluster_df = df_summary[df_summary["cluster"] == cid]
+    cluster_df = df_summary[df_summary["cluster_id"] == cid]
     color = colors[i % len(colors)]
-    
+
     frames = []
     for _, row in cluster_df.iterrows():
         p = MICROTRIPS_DIR / row["filename"]
@@ -93,9 +93,9 @@ for i, cid in enumerate(clusters_to_plot):
 
     t_all = data["t_rel"].to_numpy()
     v_all = data["smooth_speed_kmh"].to_numpy()
-    
+
     mean_speed = v_all.mean()
-    
+
     ax.scatter(
         t_all,
         v_all,
@@ -106,13 +106,15 @@ for i, cid in enumerate(clusters_to_plot):
         label=f"Cluster {cid} (n={n_microtrips})",
         rasterized=True,
     )
-    
-    cluster_stats.append({
-        "Cluster": cid,
-        "Microtrips": n_microtrips,
-        "Samples": n_samples,
-        "Mean Speed (km/h)": round(mean_speed, 1),
-    })
+
+    cluster_stats.append(
+        {
+            "Cluster": cid,
+            "Microtrips": n_microtrips,
+            "Samples": n_samples,
+            "Mean Speed (km/h)": round(mean_speed, 1),
+        }
+    )
 
 # ── Finalize Figure ─────────────────────────────────────────────────────────
 
@@ -137,7 +139,7 @@ if cluster_stats:
     headers = ["Cluster", "Microtrips", "Samples", "Mean Speed (km/h)"]
     header_row = "| " + " | ".join(headers) + " |"
     sep_row = "| " + " | ".join(["---"] * len(headers)) + " |"
-    
+
     table_rows = [header_row, sep_row]
     for row in cluster_stats:
         cells = [
@@ -147,9 +149,9 @@ if cluster_stats:
             f"{row['Mean Speed (km/h)']:.1f}",
         ]
         table_rows.append("| " + " | ".join(cells) + " |")
-        
+
     table_md = "\n".join(table_rows)
-    
+
     report = f"""\
 # Microtrip Cluster Comparison (v-t)
 

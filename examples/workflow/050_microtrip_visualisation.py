@@ -93,10 +93,10 @@ if not summary_path.exists():
     raise SystemExit(1)
 
 df_summary = pd.read_csv(summary_path)
-cluster_df = df_summary[df_summary["cluster"] == CLUSTER_ID].copy()
+cluster_df = df_summary[df_summary["cluster_id"] == CLUSTER_ID].copy()
 
 if cluster_df.empty:
-    available = sorted(df_summary["cluster"].unique())
+    available = sorted(df_summary["cluster_id"].unique())
     print(f"No microtrips found for cluster {CLUSTER_ID}.")
     print(f"Available cluster IDs: {available}")
     raise SystemExit(1)

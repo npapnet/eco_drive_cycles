@@ -79,7 +79,7 @@ plt.tight_layout()
 # %%
 # ── Fit KMeans ─────────────────────────────────────────────────────────────────
 km = KMeans(n_clusters=N_CLUSTERS, random_state=42, n_init="auto")
-df["cluster"] = km.fit_predict(X_scaled).astype(str)
+df["cluster_id"] = km.fit_predict(X_scaled).astype(str)
 
 # ── Save augmented summary to microtrips/ ──────────────────────────────────────
 clustered_path = microtrips_dir / "summary_clustered.csv"
@@ -90,8 +90,8 @@ print(f"Clustered summary written to {clustered_path}")
 # ── Pairplot — cluster separation across all feature pairs ─────────────────────
 # plt.figure()
 g = sns.pairplot(
-    df[FEATURES + ["cluster"]],
-    hue="cluster",
+    df[FEATURES + ["cluster_id"]],
+    hue="cluster_id",
     diag_kind="kde",
     plot_kws={"alpha": 0.5, "s": 20},
 )
@@ -102,9 +102,9 @@ g.figure.suptitle("Microtrip clusters — pairplot", y=1.02)
 g.savefig(REPORTS_DIR / "microtrip_clusters_pairplot.png", dpi=300)
 # %%
 # ── Cluster summary ────────────────────────────────────────────────────────────
-cluster_sizes = df.groupby("cluster").size().rename("count")
-cluster_mean = df.groupby("cluster")[FEATURES].mean().round(3)
-cluster_std = df.groupby("cluster")[FEATURES].std().round(3)
+cluster_sizes = df.groupby("cluster_id").size().rename("count")
+cluster_mean = df.groupby("cluster_id")[FEATURES].mean().round(3)
+cluster_std = df.groupby("cluster_id")[FEATURES].std().round(3)
 
 print(f"\nItems per cluster:\n{cluster_sizes.to_string()}")
 print(f"\nCluster means:\n{cluster_mean.to_string()}")
