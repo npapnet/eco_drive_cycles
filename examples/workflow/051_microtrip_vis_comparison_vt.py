@@ -28,6 +28,9 @@ OUTPUT_DIR = ROOTDIR / _cfg["output_dir"]
 REPORTS_DIR = OUTPUT_DIR / "reports"
 REPORTS_DIR.mkdir(exist_ok=True, parents=True)
 
+FIGS_DIR = REPORTS_DIR / "figs-comparison"
+FIGS_DIR.mkdir(exist_ok=True, parents=True)
+
 MICROTRIPS_DIR = OUTPUT_DIR / "microtrips"
 
 # ── User-adjustable settings ──────────────────────────────────────────────────
@@ -129,7 +132,7 @@ for lh in leg.legend_handles:
 
 plt.tight_layout()
 
-vt_path = REPORTS_DIR / "microtrip_clusters_comparison_vt.png"
+vt_path = FIGS_DIR / "microtrip_clusters_comparison_vt.png"
 fig.savefig(vt_path, dpi=150)
 print(f"\nSaved comparison plot to: {vt_path}")
 
@@ -164,7 +167,7 @@ if cluster_stats:
 Every motion-phase sample plotted as (relative time from microtrip start, speed).
 Stop-phase samples excluded. Clusters are color-coded.
 
-![v-t scatter comparison](microtrip_clusters_comparison_vt.png)
+![v-t scatter comparison](figs-comparison/microtrip_clusters_comparison_vt.png)
 """
 
     report_path = REPORTS_DIR / "microtrip_clusters_comparison_report.md"

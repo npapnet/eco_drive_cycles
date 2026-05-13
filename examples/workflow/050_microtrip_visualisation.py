@@ -75,6 +75,9 @@ OUTPUT_DIR = ROOTDIR / _cfg["output_dir"]
 REPORTS_DIR = OUTPUT_DIR / "reports"
 REPORTS_DIR.mkdir(exist_ok=True, parents=True)
 
+FIGS_DIR = REPORTS_DIR / "figs-visualisation"
+FIGS_DIR.mkdir(exist_ok=True, parents=True)
+
 MICROTRIPS_DIR = OUTPUT_DIR / "microtrips"
 
 # ── User-adjustable settings ──────────────────────────────────────────────────
@@ -170,7 +173,7 @@ if ENABLE_VA_DENSITY:
     )
     plt.tight_layout()
 
-    va_path = REPORTS_DIR / f"cluster_{CLUSTER_ID}_va_density.png"
+    va_path = FIGS_DIR / f"cluster_{CLUSTER_ID}_va_density.png"
     fig1.savefig(va_path, dpi=150)
     print(f"  Saved: {va_path}")
 else:
@@ -211,7 +214,7 @@ ax2.text(
 )
 plt.tight_layout()
 
-vt_path = REPORTS_DIR / f"cluster_{CLUSTER_ID}_vt_scatter.png"
+vt_path = FIGS_DIR / f"cluster_{CLUSTER_ID}_vt_scatter.png"
 fig2.savefig(vt_path, dpi=150)
 print(f"  Saved: {vt_path}")
 
@@ -220,7 +223,7 @@ mean_speed_cluster = cluster_df["mean_speed_kmh"].mean()
 mean_duration_cluster = cluster_df["duration_s"].mean()
 
 _va_section = (
-    f"## v-a Density Cloud\n\n![v-a density](cluster_{CLUSTER_ID}_va_density.png)\n"
+    f"## v-a Density Cloud\n\n![v-a density](figs-visualisation/cluster_{CLUSTER_ID}_va_density.png)\n"
     if ENABLE_VA_DENSITY
     else (
         "## v-a Density Cloud\n\n"
@@ -245,7 +248,7 @@ report = f"""\
 Every motion-phase sample plotted as (relative time from microtrip start, speed).
 Stop-phase samples excluded.
 
-![v-t scatter](cluster_{CLUSTER_ID}_vt_scatter.png)
+![v-t scatter](figs-visualisation/cluster_{CLUSTER_ID}_vt_scatter.png)
 
 {_va_section}
 """

@@ -29,6 +29,9 @@ OUTPUT_DIR = ROOTDIR / _cfg["output_dir"]
 REPORTS_DIR = OUTPUT_DIR / "reports/"
 REPORTS_DIR.mkdir(exist_ok=True, parents=True)
 
+FIGS_DIR = REPORTS_DIR / "figs-clustering"
+FIGS_DIR.mkdir(exist_ok=True, parents=True)
+
 
 # Identifier columns — excluded from clustering features.
 # Keep in sync with the same constant in 03_build_microtrips.py.
@@ -99,7 +102,7 @@ g.figure.suptitle("Microtrip clusters — pairplot", y=1.02)
 
 
 # %%
-g.savefig(REPORTS_DIR / "microtrip_clusters_pairplot.png", dpi=300)
+g.savefig(FIGS_DIR / "microtrip_clusters_pairplot.png", dpi=300)
 # %%
 # ── Cluster summary ────────────────────────────────────────────────────────────
 cluster_sizes = df.groupby("cluster_id").size().rename("count")
@@ -149,7 +152,7 @@ report = f"""\
 
 ## Pairplot
 
-![Microtrip cluster pairplot](microtrip_clusters_pairplot.png)
+![Microtrip cluster pairplot](figs-clustering/microtrip_clusters_pairplot.png)
 """
 
 report_path = REPORTS_DIR / "microtrip_clusters_report.md"

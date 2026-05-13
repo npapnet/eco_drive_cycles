@@ -28,6 +28,9 @@ OUTPUT_DIR = ROOTDIR / _cfg["output_dir"]
 
 REPORTS_DIR = OUTPUT_DIR / "reports/"
 REPORTS_DIR.mkdir(exist_ok=True, parents=True)
+
+FIGS_DIR = REPORTS_DIR / "figs-representatives"
+FIGS_DIR.mkdir(exist_ok=True, parents=True)
 MICROTRIPS_DIR = OUTPUT_DIR / "microtrips/"
 
 # ── Load data ──────────────────────────────────────────────────────────────────
@@ -127,7 +130,7 @@ for rank_col in rank_cols:
     for ax in g.axes.flat:
         ax.legend(title="Microtrips", fontsize="small", title_fontsize="small", loc="upper right")
 
-    plot_path = REPORTS_DIR / f"representative_microtrips_{measure_name}.png"
+    plot_path = FIGS_DIR / f"representative_microtrips_{measure_name}.png"
     g.savefig(plot_path, dpi=300, bbox_inches="tight")
     print(f"  Saved: {plot_path}")
     plt.close(g.figure)

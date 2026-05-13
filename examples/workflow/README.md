@@ -64,9 +64,13 @@ data/
 ├── microtrips/                   ← step 03: per-microtrip Parquets + summary
 │   ├── <trip>_mt<NN>.parquet
 │   └── summary.csv
-└── figs/                         ← step 04: clustering plots and report
-    ├── microtrip_clusters_pairplot.png
-    └── microtrip_clusters_report.md
+└── reports/                      ← step 04-06: clustering plots and reports
+    ├── figs-clustering/
+    ├── figs-visualisation/
+    ├── figs-comparison/
+    ├── figs-representatives/
+    ├── microtrip_clusters_report.md
+    └── ...
 ```
 
 ---
