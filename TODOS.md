@@ -1,18 +1,5 @@
 # Immediate steps
 
-## P1 — Resampling and Gap-Check During Ingestion
-- **Domain:** Data Ingestion / Signal Quality
-- **Effort:** S | **Impact:** H | **ROI:** High (Low-Hanging Fruit)
-- **Status:** 🏗️ Todo
-- **Dependencies:** None
-
-* **The 'Why' (Value):** Raw OBD data has irregular sampling. A uniform 1 s time base is assumed by all downstream calculations (segmentation uses sample count as a duration proxy at ~1 Hz). Gaps indicate sensor loss or engine restarts and must be flagged.
-* **The 'What' (Execution):**
-  - Resample raw data to a fixed 1 s frequency in `OBDFile.to_parquet()` before writing the archive Parquet.
-  - Add a configurable `max_gap_s` parameter (default 5 s). If exceeded: warn or abort based on a `--strict-gaps` CLI flag.
-  - Propagate the parameter through `dcc ingest`.
-* **Targets:** `src/drive_cycle_calculator/obd_file.py`, `src/drive_cycle_calculator/cli/ingest.py`.
-
 ---
 
 # ✅ Done in this sprint

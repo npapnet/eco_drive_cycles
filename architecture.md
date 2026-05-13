@@ -18,10 +18,10 @@ exported as CSV/XLSX. Archived v2 Parquets are in `data/trips/`.
 Raw .xlsx / .csv (OBD-II)
   → dcc config-init <folder>              # generate metadata-<folder>.yaml template
   [user fills in metadata-<folder>.yaml]
-  → dcc ingest <raw_dir> <out_dir>        # raw file → v2 archive Parquet with embedded metadata
-                                          # NO DuckDB created here
+  → dcc ingest <raw_dir> <out_dir>        # raw file → uniform 1 Hz resampled archive Parquet
+                                          # checks gaps, embeds metadata, NO DuckDB created
 
-Archive Parquet (self-contained: raw data + ParquetMetadata)
+Archive Parquet (uniform 1 Hz time series + ParquetMetadata)
   → dcc extract <data_dir>               # read parquets → apply ProcessingConfig → output
   → DuckDB / CSV / XLSX (trip_metrics)   # metrics + metadata + config snapshot
 

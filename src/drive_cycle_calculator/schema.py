@@ -96,6 +96,22 @@ class ComputedTripStats(BaseModel):
     gps_lon_std: float = Field(0.0, description="Std deviation of longitude")
 
 
+# ── Ingest config (resampling / gap-check provenance) ─────────────────────────
+
+
+class IngestConfig(BaseModel):
+    """Settings applied during ingest (resampling, gap-checking).
+
+    Embedded in every archive Parquet for provenance tracking so downstream
+    readers can tell whether the archive was resampled and what gap policy
+    was in effect.
+    """
+
+    resample: bool = Field(True, description="Whether 1 Hz resampling was applied")
+    max_gap_s: float = Field(5.0, description="Gap threshold used for gap-checking")
+    strict_gaps: bool = Field(False, description="Whether strict gap-checking was enabled")
+
+
 # ── Top-level container ───────────────────────────────────────────────────────
 
 
@@ -109,6 +125,9 @@ class ParquetMetadata(BaseModel):
     ingest_provenance: IngestProvenance
     computed_trip_stats: ComputedTripStats
     user_metadata: UserMetadata
+    ingest_config: Optional[IngestConfig] = Field(
+        None, description="Resampling/gap settings used during ingest (None for pre-v0.5 archives)"
+    )
 
 
 # ── SegmentationConfig ────────────────────────────────────────────────────────
