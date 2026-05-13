@@ -1,191 +1,220 @@
-# Immediate Next Steps
+# Immediate steps
 
+## P1 — Resampling and Gap-Check During Ingestion
+- **Domain:** Data Ingestion / Signal Quality
+- **Effort:** S | **Impact:** H | **ROI:** High (Low-Hanging Fruit)
+- **Status:** 🏗️ Todo
+- **Dependencies:** None
 
-
-## P1 — Resampling and gap-check during ingestion
-
-**What:** In `dcc ingest` (and `OBDFile.to_parquet`), resample raw data to a fixed 1s frequency before saving to Parquet. Add an adjustable `max_gap_s` check (default 5s). If a time gap exceeds this threshold, either issue a warning or abort the conversion based on a CLI flag.
-
-**Why:** Raw OBD data often has irregular sampling. Resampling to 1s ensures a uniform time base for all downstream calculations. Gaps in data indicate sensor loss or engine restarts, which should be flagged to the user.
-
-**Where:** `src/drive_cycle_calculator/obd_file.py` and `src/drive_cycle_calculator/cli/ingest.py`.
-
-**Effort:** S
-
-## P1 — Check what is saved into each microtrip parquet
-
-**What:** Check what is saved into each microtrip parquet file? Are all data from the trip saved or just the CURATED data.
-
-**Why:** The microtrips are an intermediate step of the analysis, and so, only specific columns are needed for downstream analysis. This will save space and time, as there are many trips to be processed. Additionally this will help because it will make the columns more predictable and not dependent on the columns available in the original data.
-
-**Where:** `src/drive_cycle_calculator/microtrip_segmenter.py`.
-
-**Effort:** ?
-
-
-## P1 — Modular in-place workflow (single-argument ingest)
-
-**What:** Modify `dcc ingest` (and potentially other commands) to support a modular, in-place workflow. The `ingest` command should accept a single directory argument. If only one argument is provided, it should use that directory for both input (raw data) and output (creating `trips/`, `microtrips/`, and reports subfolders within it).
-
-**Why:** The current requirement for separate input and output directories is a legacy of a centralized repository model. A more modular approach allows researchers to keep processed artifacts alongside their raw data source.
-
-**Where:** `src/drive_cycle_calculator/cli/ingest.py` and `src/drive_cycle_calculator/cli/main.py`.
-
-**Effort:** S
-
-# DONE IN THIS ITERATION 
-
-## P1 — v-a density cloud and canonical profile visualisation
-
-**What:** Implement advanced visualisations for cluster analysis:
-1. **v-a Density Cloud**: Create a 2D density plot (KDE2D or Hexbin) of Speed vs. Acceleration for all samples in the dataset, color-coded or faceted by cluster.
-2. **Canonical Microtrips**: Plot the time-series speed profiles of the representative microtrips for each cluster.
-
-**Why:** Clustering needs visual validation. Joint velocity-acceleration (v-a) probability density matrices (or "clouds") are the industry standard for drive cycle "fingerprinting" and representativeness validation (e.g., André 2004, Ericsson 2001). Unlike v-t (speed-time) profiles which show individual events, v-a clouds capture the aggregate statistical "signature" of the driving behavior. Standard scatter plots become unreadable with large datasets.
-
-**Performance Consideration:** With large datasets (thousands of microtrips), KDE plots and pairwise similarity can be computationally expensive. Use sampling or efficient binning (e.g., `datashader` or `hexbin`) for the v-a cloud. Plan carefully
-
-**Where:** `examples/workflow/05_microtrip_visulisation.py` 
-
-**Effort:** M
-
-
-# Backlog
-
-## P2 — Reassess the role of DuckDB in the pipeline
-
-**Question:** Is DuckDB still the right persistence layer, or should the pipeline be simplified?
-
-**Context:** The original motivation was a persistent catalog of trip metrics for fast querying without reprocessing Parquets. In practice:
-- `dcc extract` already exports metrics to CSV or XLSX (not just DuckDB), so the metrics are available in open formats without a database.
-- `dcc analyze` uses DuckDB only as a lookup table to find Parquet paths, then re-reads the Parquets anyway — so DuckDB adds a round-trip with no data benefit at current scale.
-- `dcc ingest` was explicitly decoupled from DuckDB (no catalog write at ingest time), which further reduces DuckDB's role.
-- The `examples/workflow/` scripts exposed this: `02_extract_analyze.py` could skip the DuckDB round-trip in the analyze phase and call `TripCollection.from_archive_parquets()` directly.
-
-**Investigate:**
-1. Is there any scenario at current or expected scale where the DuckDB catalog provides a real benefit over loading Parquets directly?
-2. Should `dcc analyze` accept a `trips/` folder directly instead of requiring a `metrics.duckdb`?
-3. Should DuckDB be demoted to an optional output format of `dcc extract` (alongside CSV/XLSX) rather than being a required intermediate step for `dcc analyze`?
-4. Does the planned Supabase migration (see below) change the answer?
+* **The 'Why' (Value):** Raw OBD data has irregular sampling. A uniform 1 s time base is assumed by all downstream calculations (segmentation uses sample count as a duration proxy at ~1 Hz). Gaps indicate sensor loss or engine restarts and must be flagged.
+* **The 'What' (Execution):**
+  - Resample raw data to a fixed 1 s frequency in `OBDFile.to_parquet()` before writing the archive Parquet.
+  - Add a configurable `max_gap_s` parameter (default 5 s). If exceeded: warn or abort based on a `--strict-gaps` CLI flag.
+  - Propagate the parameter through `dcc ingest`.
+* **Targets:** `src/drive_cycle_calculator/obd_file.py`, `src/drive_cycle_calculator/cli/ingest.py`.
 
 ---
 
-## P2 - revisit cli commands workflow 
+# ✅ Done in this sprint
 
-Why: Ladikas data processing indicated problems with the current workflow. 
+## v-a Density Cloud and Canonical Profile Visualisation
+- **Domain:** Visualisation / Cluster Validation
+- **Effort:** M | **Impact:** H | **ROI:** High
+- **Status:** ✅ Done
+- **Dependencies:** None
 
-The current workflow is:
-- `dcc ingest`
-- `dcc extract` 
-- `dcc analyze`
-- `dcc gui`
-
-
-**Issues identified with the current workflow:**
-
-1. **extract** could use a filter with the name of the user. 
-3. **analyse**: only outputs to the console. It would be better to have an option to output to a file. It was unclear which db or set of data it used. 
-4. **gui**:
-    - The gui during analysis tried to load files and could not ( reporte to hte console something like `<path>\drive_cycle_calculator\cli\gui.py:137: UserWarning: Trip 't20250813-092120-384-3bdac5': cannot load '<path to repo>>\\data\\trips\\t20250813-092120-384-3bdac5.parquet' — File not found: <path to repo>\data\trips\t20250813-092120-384-3bdac5.parquet. Skipping.`)
-    - There was no option for outputing the data, nor reporting fo the similarity measures. 
-    - There were no filters 
-  
-
-I am focusing towards an approach that creates for the analysis a dedicated folder based on the date and time of the analysis, and all the outputs of the analysis are stored in that folder. This folder will include the similarity measures, the representative microtrips, and the representative driving cycle. 
+* **The 'Why' (Value):** Joint velocity-acceleration (v-a) probability density matrices are the industry standard for drive cycle fingerprinting and representativeness validation (André 2004, Ericsson 2001). Unlike v-t profiles which show individual events, v-a clouds capture aggregate statistical signatures. Standard scatter plots become unreadable with large datasets.
+* **The 'What' (Execution):**
+  - v-a density hexbin (`050_microtrip_visualisation.py`) — per-cluster hexbin of speed vs. acceleration, with scalability notes for datashader/KDE2D at fleet scale.
+  - v-t scatter cloud (`050_microtrip_visualisation.py`) — per-cluster point cloud of (relative time, speed).
+  - v-t comparison overlay (`051_microtrip_vis_comparison_vt.py`) — multi-cluster overlay on a single figure.
+  - Canonical representative profiles (`062_plot_representatives.py`) — faceted top-N speed profiles per cluster per similarity metric.
+* **Targets:** `examples/workflow/050_*.py`, `051_*.py`, `062_*.py`.
 
 
-## P1 — Representative microtrip selection
+# 📥 Triage & Next Steps
 
-**What:** `TripCollection.find_representative_microtrip() -> Microtrip` using the same 7-metric similarity scoring but at microtrip granularity.
+## P1 — Candidate Cycle Assembly
+- **Domain:** Analysis / Cycle Synthesis
+- **Effort:** M | **Impact:** H | **ROI:** High
+- **Status:** 🏗️ Todo
+- **Dependencies:** ~~Representative microtrip selection~~ ✓ prototyped in workflow (`060`/`062`)
 
-**Effort:** S (human: ~4 hrs / CC: ~10 min)
-
-**Depends on:** ~~v0.4 refactor (`MicrotripSegmenter` + `trip.microtrips`)~~ ✓ shipped (2026-05-03). `trip.microtrips` and `MicrotripSegmenter` are live.
-
----
-
-## P1 — Candidate cycle assembly
-
-**What:** Assemble a synthetic representative driving cycle from a sequence of representative microtrips. Output: a time-series speed profile that matches the overall fleet statistics.
-
-**Effort:** M (human: ~2 days / CC: ~30 min)
-
-**Depends on:** Representative microtrip selection (P1).
+* **The 'Why' (Value):** This is the project's primary research deliverable — a synthetic representative driving cycle assembled from microtrip building blocks that statistically matches fleet-level metrics. Without this, the pipeline stops at clustering.
+* **The 'What' (Execution):**
+  - Define a cycle-assembly algorithm: select one representative microtrip per cluster, concatenate into a time-series speed profile, validate aggregate statistics (mean speed, stop %, acc/dec) against fleet averages.
+  - Prototype as a new workflow script (`07x_assemble_cycle.py`) before promoting to package.
+  - Output: time-series DataFrame + summary stats + validation report.
+* **Targets:** New `examples/workflow/07x_*.py`, eventually `src/drive_cycle_calculator/cycle_assembly.py`.
 
 ---
 
-## P2 — First-batch data quality audit + future acquisition spec
 
-**What:** Run `scripts/migrate_to_archive.py` against the first batch of raw data (Galatas, Stefanakis, Kalyvas, Ladikas) and document which files fail, which columns are missing or malformed, and what the spread of issues is per driver. Then define a minimum column spec for future data acquisition sessions.
 
-**Why:** The first batch was collected without standardized specs. Without this, the same quality issues will recur with each new batch.
+## P1 — Modular In-Place Workflow (Single-Argument Ingest)
+**Domain:** CLI / UX
+**Effort:** S | **Impact:** M | **ROI:** High (Low-Hanging Fruit)
+**Status:** 🏗️ Todo
+**Dependencies:** None
 
-**How to apply:** Run migration script against `raw_data/`. Review the `SKIP` output. Write `docs/data_acquisition_spec.md` listing: required OBD-II channels, expected dtypes, known Torque export quirks. Reference `CURATED_COLS` as the minimum viable set.
-
-**Effort:** S (human: ~2 hrs / CC: ~10 min)
-
----
-
-## P2 — `OBDFile.compare_smoothing(windows=[2, 4, 8])`
-
-**What:** Method on `OBDFile` that applies `ProcessingConfig(window=w)` for each window size and returns a DataFrame of key metrics (mean_speed, mean_acc, stop_pct) per window. Useful for choosing the right smoothing parameter before committing to a `ProcessingConfig`.
-
-**Why:** The `window=4` default was inherited from the student DriveGUI. No empirical basis. Researchers need a quick way to see how metric stability changes with window size.
-
-**Where:** `src/drive_cycle_calculator/obd_file.py`
-
-**Effort:** S (human: ~1 hr / CC: ~10 min)
-
+* **The 'Why' (Value):** The two-argument `dcc ingest <raw_dir> <out_dir>` is a legacy of a centralized repository model. Researchers expect to keep processed artifacts alongside their raw data.
+* **The 'What' (Execution):**
+  - If `dcc ingest` receives a single directory argument, use it for both input and output (creating `trips/`, `microtrips/`, `reports/` subfolders within it).
+  - Two-argument form remains supported for backward compatibility.
+* **Targets:** `src/drive_cycle_calculator/cli/ingest.py`, `src/drive_cycle_calculator/cli/main.py`.
 
 ---
 
-## P2 — Supabase migration script
+## P2 — Representative Microtrip Selection (Promote to Package)
+- **Domain:** Analysis / Package API
+- **Effort:** S | **Impact:** M | **ROI:** High (Low-Hanging Fruit)
+- **Status:** 🏗️ Todo
+- **Dependencies:** ~~v0.4 refactor~~ ✓ shipped. ~~Workflow prototype~~ ✓ `060`/`062` scripts.
 
-**What:** `scripts/migrate_to_postgres.py` — reads `metadata.duckdb` and writes to a Supabase/PostgreSQL `trips` table.
-
-**Effort:** M (human: ~1 day / CC: ~20 min)
-
-**Depends on:** Parquet + DuckDB persistence proven in practice ✓.
-
-
----
-
-## P3 — Trip listbox in examples/gui/
-
-**What:** Show all trips in a scrollable listbox in `examples/gui/main.py`. Clicking a trip loads its speed profile. Representative trip is highlighted.
-
-**Effort:** S (human: ~2 hrs / CC: ~10 min)
+* **The 'Why' (Value):** Algorithm is fully proven in workflow staging (`060_select_representatives.py`, `062_plot_representatives.py`). Promoting to the package makes it testable, importable, and reusable across datasets without copy-pasting workflow scripts.
+* **The 'What' (Execution):**
+  - Extract ranking logic from `060_select_representatives.py` into a new module (e.g. `src/drive_cycle_calculator/microtrip_ranking.py`) or as a method on `TripCollection`.
+  - Support the three pluggable similarity measures already implemented: `z_score_distance`, `pct_deviation`, `cosine_similarity`.
+  - Export `ranked_microtrips.csv` with `score_<name>` and `rank_<name>` columns per cluster.
+  - Add unit tests covering per-cluster ranking and edge cases.
+* **Targets:** New `src/drive_cycle_calculator/microtrip_ranking.py` or `trip_collection.py`, `tests/`.
 
 ---
 
-## P2 — Microtrip export to Parquet
+## P2 — First-Batch Data Quality Audit
+- **Domain:** Data Engineering / Quality
+- **Effort:** S | **Impact:** M | **ROI:** Medium
+- **Status:** 🏗️ Todo
+- **Dependencies:** None
 
-**What:** Persist a `list[Microtrip]` to disk as Parquet files in a dedicated output folder, so microtrips can be loaded and analysed independently of the parent `Trip` objects.
-
-**Why:** Currently microtrips are in-memory only and lost when the process exits. Exporting them is a prerequisite for the analysis output folder workflow (`dcca-<YYYYMMDD-hhmm>/microtrips/`).
-
-**Depends on:** ~~v0.4 refactor~~ ✓ shipped (2026-05-03).
-
----
-
-## P3 — TripCollection constructor-level filtering
-
-**What:** Optional filter parameters on `TripCollection.from_archive_parquets()` (and potentially `from_duckdb_catalog()`) so callers can load a pre-filtered collection without loading all trips first. Example: `from_archive_parquets(path, user="John")`.
-
-**Why:** `TripCollection` is a result/container type — filtering belongs at load time, not as a method on the collection. With single-driver datasets this is not needed; becomes useful when the archive contains multiple drivers.
-
-**Effort:** S
+* **The 'Why' (Value):** The first batch (Galatas, Stefanakis, Kalyvas, Ladikas) was collected without standardized specs. Without an audit, the same quality issues (missing columns, format mismatches, separator/decimal inconsistencies) will recur with each new batch.
+* **The 'What' (Execution):**
+  - Run `scripts/migrate_to_archive.py` against `raw_data/`. Document which files fail, which columns are missing/malformed, and the spread per driver.
+  - Write `docs/data_acquisition_spec.md`: required OBD-II channels, expected dtypes, known Torque export quirks. Reference `CURATED_COLS` as the minimum viable set.
+* **Targets:** `scripts/migrate_to_archive.py`, `raw_data/`, new `docs/data_acquisition_spec.md`.
 
 ---
 
-## P3 — SQL-backed similarity scoring (fast path for large catalogs)
+## P2 — Smoothing Window Comparison Utility
+- **Domain:** Analysis / Signal Processing
+- **Effort:** S | **Impact:** L | **ROI:** Medium
+- **Status:** 🏗️ Todo
+- **Dependencies:** None
 
-**What:** Optional fast path for `TripCollection.similarity_scores()` that reads pre-computed metrics directly from the DuckDB catalog instead of loading all DataFrames.
+* **The 'Why' (Value):** The `window=4` default was inherited from the student DriveGUI with no empirical basis. Researchers need a quick way to see how metric stability (mean_speed, mean_acc, stop_pct) changes with window size before committing to a `ProcessingConfig`.
+* **The 'What' (Execution):**
+  - Add `OBDFile.compare_smoothing(windows=[2, 4, 8]) -> pd.DataFrame` that applies `ProcessingConfig(window=w)` for each window and returns a metrics comparison table.
+* **Targets:** `src/drive_cycle_calculator/obd_file.py`.
 
-**Why:** Current approach triggers N `pd.read_parquet()` calls on first invocation. Fine at 5–20 trips. At 500+ trips this is slow; the 7 metrics are already stored in the catalog.
+---
 
-**Effort:** S (human: ~4 hrs / CC: ~15 min)
+## P3 — Microtrip Export to Parquet (Promote to Package)
+- **Domain:** Package API / Persistence
+- **Effort:** S | **Impact:** L | **ROI:** Medium
+- **Status:** 🏗️ Todo
+- **Dependencies:** ~~v0.4 refactor~~ ✓ shipped. ~~Workflow prototype~~ ✓ `03_build_microtrips.py`.
 
-**Depends on:** Parquet + DuckDB persistence layer ✓.
+* **The 'Why' (Value):** Logic is fully proven in workflow. `03_build_microtrips.py` writes per-microtrip Parquets (processed columns + `stop_phase` flag) and `summary.csv`. Microtrip Parquets contain only the processed (curated) columns — they are intermediate disposable artifacts. Promoting to the package makes it a first-class API.
+* **The 'What' (Execution):**
+  - Extract export logic into a `Microtrip.to_parquet()` method or a utility function in `segmentation.py`.
+  - Ensure output schema matches workflow convention: processed columns only + `stop_phase` boolean.
+  - Add unit tests.
+* **Targets:** `src/drive_cycle_calculator/microtrip.py` or `segmentation.py`, `tests/`.
 
+---
+
+## P3 — TripCollection Constructor-Level Filtering
+- **Domain:** Package API / Data Loading
+- **Effort:** S | **Impact:** L | **ROI:** Low
+- **Status:** 🏗️ Todo
+- **Dependencies:** None
+
+* **The 'Why' (Value):** `TripCollection` is a result/container type — filtering belongs at load time, not post-hoc. Not needed for single-driver datasets, but becomes important when the archive contains multiple drivers.
+* **The 'What' (Execution):**
+  - Add optional filter kwargs to `TripCollection.from_archive_parquets()` (e.g. `user="John"`).
+  - Read embedded `ParquetMetadata.user_metadata` to filter before full DataFrame load.
+* **Targets:** `src/drive_cycle_calculator/trip_collection.py`.
+
+---
+
+## P3 — Trip Listbox in GUI
+- **Domain:** GUI / UX
+- **Effort:** S | **Impact:** L | **ROI:** Low
+- **Status:** 🏗️ Todo
+- **Dependencies:** None
+
+* **The 'Why' (Value):** The current GUI has no interactive trip selection. A scrollable listbox with click-to-load and representative-trip highlighting would make exploratory analysis more accessible.
+* **The 'What' (Execution):**
+  - Add a trip listbox panel to `examples/gui/main.py`.
+  - Clicking a trip loads its speed profile. Representative trip is visually highlighted.
+* **Targets:** `examples/gui/main.py`.
+
+---
+
+# 🧊 Backlog / Architectural Epics
+
+## P2 — Reassess the Role of DuckDB in the Pipeline
+- **Domain:** Data Engineering / Persistence Architecture
+- **Effort:** M | **Impact:** M | **ROI:** Medium
+- **Status:** 🔍 Investigating
+- **Dependencies:** Outcome influences Supabase migration (below)
+
+* **The 'Why' (Value):** DuckDB was introduced as a persistent metrics catalog for fast querying without reprocessing Parquets. In practice, its role has eroded:
+  - `dcc extract` already exports to CSV/XLSX — metrics are available in open formats without a database.
+  - `dcc analyze` uses DuckDB only as a lookup table for Parquet paths, then re-reads Parquets anyway — a round-trip with no benefit at current scale.
+  - `dcc ingest` was explicitly decoupled from DuckDB (no catalog write at ingest time).
+  - Workflow scripts `03`→`062` never touch the database — they operate entirely on Parquet files and CSV summaries.
+* **The 'What' (Execution):**
+  1. Determine if any scenario at current or expected scale benefits from DuckDB over loading Parquets directly.
+  2. Evaluate whether `dcc analyze` should accept a `trips/` folder directly instead of requiring `metrics.duckdb`.
+  3. Consider demoting DuckDB to an optional output format of `dcc extract` (alongside CSV/XLSX) rather than a mandatory intermediate.
+  4. Assess whether the planned Supabase migration changes the answer.
+* **Targets:** `src/drive_cycle_calculator/cli/extract.py`, `cli/analyze.py`, `trip_collection.py`.
+
+---
+
+## P2 — Revisit CLI Commands Workflow
+- **Domain:** CLI / UX / Architecture
+- **Effort:** M | **Impact:** H | **ROI:** Medium
+- **Status:** 🔍 Investigating
+- **Dependencies:** DuckDB reassessment (above)
+
+* **The 'Why' (Value):** Ladikas data processing exposed friction in the `dcc ingest` → `extract` → `analyze` → `gui` pipeline:
+  - `extract`: no user-level filtering.
+  - `analyze`: output is console-only, unclear which DB/dataset is being used.
+  - `gui`: broken Parquet path resolution (`FileNotFoundError`), no data export, no similarity reporting, no filters.
+* **The 'What' (Execution):**
+  - Converge CLI towards the `examples/workflow/` model: timestamped analysis folders (`dcca-<YYYYMMDD-HHMM>/`), file-based reports (Markdown + CSV), config-driven design.
+  - The workflow pipeline (`01`→`062`) is the de-facto reference implementation. CLI commands should adopt its patterns.
+  - Fix `gui.py` Parquet path resolution bug.
+  - Add `--output-dir` and `--user` filter flags to relevant commands.
+* **Targets:** `src/drive_cycle_calculator/cli/` (all subcommands), `examples/workflow/` (reference).
+
+---
+
+## P2 — Supabase Migration Script
+- **Domain:** Data Engineering / Cloud Persistence
+- **Effort:** M | **Impact:** M | **ROI:** Low
+- **Status:** 🏗️ Todo
+- **Dependencies:** ~~Parquet + DuckDB persistence~~ ✓ proven. Blocked by DuckDB reassessment outcome.
+
+* **The 'Why' (Value):** Cloud persistence enables multi-user, multi-device access to the trip catalog. Prerequisite for any future web-based dashboard.
+* **The 'What' (Execution):**
+  - Write `scripts/migrate_to_postgres.py`: read `metadata.duckdb` → write to a Supabase/PostgreSQL `trips` table.
+* **Targets:** New `scripts/migrate_to_postgres.py`.
+
+---
+
+## P3 — SQL-Backed Similarity Scoring (Fast Path)
+- **Domain:** Analysis / Performance
+- **Effort:** S | **Impact:** L | **ROI:** Low
+- **Status:** 🏗️ Todo
+- **Dependencies:** ~~Parquet + DuckDB persistence~~ ✓. Blocked by DuckDB reassessment — if DuckDB is removed, this task is moot.
+
+* **The 'Why' (Value):** Current `TripCollection.similarity_scores()` triggers N `pd.read_parquet()` calls on first invocation. Fine at 5–20 trips; at 500+ trips this is slow. The 7 metrics are already stored in the DuckDB catalog.
+* **The 'What' (Execution):**
+  - Add an optional fast path that reads pre-computed metrics directly from the DuckDB catalog instead of loading all DataFrames.
+* **Targets:** `src/drive_cycle_calculator/trip_collection.py`.
+
+---
 

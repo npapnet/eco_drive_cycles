@@ -106,16 +106,23 @@ Passed to `Trip.segment()` at call time; not stored on the Trip.
 Fields: `trip_file` (Path), `parquet_id` (str), `start_idx`, `end_idx`,
 `stop_start_idx`, `stop_end_idx` (all iloc positions).
 Private `_trip_ref: weakref.ref` bound via `bind(trip)`.
-Properties: `samples` (motion DataFrame slice), `stop_samples` (trailing-stop slice),
-`stop_duration_after` (float seconds).
-Data access raises `RuntimeError` if Trip is GC'd (D1: no parquet reload fallback).
-See `docs/designs/archive/microtrip_design_spec.md`.
+
+**Properties (Data Access)**:
+- `samples` (motion DataFrame slice)
+- `stop_samples` (trailing-stop slice)
+- `stop_duration_after` (float seconds)
+
+**Lifecycle & Persistence**:
+- Microtrips are **intermediate disposable artifacts**.
+- When saved to disk (e.g. by workflow scripts), they contain only the **processed columns** (the subset derived from `CURATED_COLS`). Original raw data is not preserved in microtrips to save space.
+- Data access in-memory raises `RuntimeError` if Trip is GC'd (D1: no parquet reload fallback).
+- See `docs/designs/archive/microtrip_design_spec.md`.
 
 ---
 
 **`Trip(df, name, stop_threshold_kmh, parquet_id="")`** — one processed session.
-`@cached_property` metrics: `mean_speed`, `mean_acceleration`, `mean_deceleration`,
-`stop_pct`, `stop_count`, `duration`, `mean_speed_no_stops`, `max_speed`.
+`@cached_property` metrics: `duration`, `mean_speed`, `mean_speed_no_stops`, `stop_count`,
+`stop_pct`, `mean_acceleration`, `mean_deceleration`, `max_speed`.
 Properties: `data` (public DataFrame alias), `file` (Path or None).
 `segment(config: SegmentationConfig) → list[Microtrip]` — convenience wrapper around `MicrotripSegmenter`.
 Stores result on `self._microtrips`; accessible via `trip.microtrips` and `trip.segmentation_config` after the call.
