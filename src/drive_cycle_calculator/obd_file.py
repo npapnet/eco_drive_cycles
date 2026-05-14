@@ -180,9 +180,7 @@ class OBDFile:
             )
 
         if descriptors:
-            summary = "; ".join(
-                f"row {d['index']}: {d['gap_s']:.1f}s" for d in descriptors
-            )
+            summary = "; ".join(f"row {d['index']}: {d['gap_s']:.1f}s" for d in descriptors)
             if strict:
                 raise ValueError(
                     f"{self.name}: {len(descriptors)} gap(s) exceed "
@@ -232,7 +230,9 @@ class OBDFile:
         # Drop rows where GPS Time is NaT
         nat_count = df["GPS Time"].isna().sum()
         if nat_count:
-            logger.info("%s: dropping %d rows with NaT GPS Time before resample.", self.name, nat_count)
+            logger.info(
+                "%s: dropping %d rows with NaT GPS Time before resample.", self.name, nat_count
+            )
             df = df.dropna(subset=["GPS Time"])
 
         if len(df) < 2:
@@ -248,8 +248,12 @@ class OBDFile:
         df = df.sort_values("GPS Time").reset_index(drop=True)
 
         # Classify columns
-        numeric_cols = [c for c in df.columns if c != "GPS Time" and pd.api.types.is_numeric_dtype(df[c])]
-        non_numeric_cols = [c for c in df.columns if c != "GPS Time" and not pd.api.types.is_numeric_dtype(df[c])]
+        numeric_cols = [
+            c for c in df.columns if c != "GPS Time" and pd.api.types.is_numeric_dtype(df[c])
+        ]
+        non_numeric_cols = [
+            c for c in df.columns if c != "GPS Time" and not pd.api.types.is_numeric_dtype(df[c])
+        ]
 
         # Detect source rate
         dt_series = df["GPS Time"].diff().dt.total_seconds().dropna()
@@ -264,7 +268,8 @@ class OBDFile:
             # to the upsampling branch instead.
             logger.info(
                 "%s: median Δt=%.2fs — downsampling to 1 Hz via mean aggregation.",
-                self.name, median_dt,
+                self.name,
+                median_dt,
             )
             agg_rules: dict = {}
             for c in numeric_cols:
@@ -415,7 +420,7 @@ class OBDFile:
         path: str | Path,
         user_metadata: "UserMetadata | None" = None,
         use_dictionary: Union[bool, list[str]] = False,
-        *,
+        *,  # the following args are keyword-only
         resample: bool = True,
         max_gap_s: float = 5.0,
         strict_gaps: bool = False,
