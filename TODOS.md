@@ -205,3 +205,17 @@
 
 ---
 
+## P2 — Handle Different Column Names Across OS and Apps
+- **Domain:** Data Engineering / Ingestion
+- **Effort:** M | **Impact:** H | **ROI:** High
+- **Status:** 🏗️ Todo
+- **Dependencies:** None
+
+* **The 'Why' (Value):** Different OSes (iOS vs Android) and different apps (Torque vs others) export different column headers. For instance, Fytros iPhone data has `time`, `Vehicle speed (km/h)`, `Longtitude` instead of `GPS Time`, `Speed (OBD)(km/h)`, `Longitude`. We need a robust translation layer to map incoming data formats to the standardized `CURATED_COLS` expected by `OBDFile` to avoid manual pre-processing.
+* **The 'What' (Execution):**
+  - Implement a mapping mechanism (e.g., a dictionary or configuration file) that defines aliases for core columns.
+  - Apply this mapping automatically in `OBDFile` constructors (`from_csv`, `from_xlsx`) before validating columns.
+* **Targets:** `src/drive_cycle_calculator/obd_file.py`, `src/drive_cycle_calculator/schema.py`.
+
+---
+
