@@ -97,7 +97,12 @@ for i, cid in enumerate(clusters_to_plot):
     t_all = data["t_rel"].to_numpy()
     v_all = data["smooth_speed_kmh"].to_numpy()
 
-    mean_speed = v_all.mean()
+    mean_speed = cluster_df["mean_speed_kmh"].mean()
+    std_speed = cluster_df["mean_speed_kmh"].std()
+    mean_speed_95th = cluster_df["speed_95th_kmh"].mean()
+    std_speed_95th = cluster_df["speed_95th_kmh"].std()
+    mean_rpa = cluster_df["rpa"].mean()
+    std_rpa = cluster_df["rpa"].std()
 
     ax.scatter(
         t_all,
@@ -115,7 +120,9 @@ for i, cid in enumerate(clusters_to_plot):
             "Cluster": cid,
             "Microtrips": n_microtrips,
             "Samples": n_samples,
-            "Mean Speed (km/h)": round(mean_speed, 1),
+            "Mean Speed (km/h)": f"{mean_speed:.1f} ± {std_speed:.1f}",
+            "95th %ile Speed (km/h)": f"{mean_speed_95th:.1f} ± {std_speed_95th:.1f}",
+            "RPA (m/s²)": f"{mean_rpa:.4f} ± {std_rpa:.4f}",
         }
     )
 
@@ -139,7 +146,7 @@ print(f"\nSaved comparison plot to: {vt_path}")
 # ── Markdown report ───────────────────────────────────────────────────────────
 if cluster_stats:
     # Build markdown table manually to avoid tabulate dependency
-    headers = ["Cluster", "Microtrips", "Samples", "Mean Speed (km/h)"]
+    headers = ["Cluster", "Microtrips", "Samples", "Mean Speed (km/h)", "95th %ile Speed (km/h)", "RPA (m/s²)"]
     header_row = "| " + " | ".join(headers) + " |"
     sep_row = "| " + " | ".join(["---"] * len(headers)) + " |"
 
@@ -149,7 +156,9 @@ if cluster_stats:
             str(row["Cluster"]),
             str(row["Microtrips"]),
             f"{row['Samples']:,}",
-            f"{row['Mean Speed (km/h)']:.1f}",
+            str(row["Mean Speed (km/h)"]),
+            str(row["95th %ile Speed (km/h)"]),
+            str(row["RPA (m/s²)"]),
         ]
         table_rows.append("| " + " | ".join(cells) + " |")
 

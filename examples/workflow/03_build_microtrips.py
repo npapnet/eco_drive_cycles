@@ -113,6 +113,7 @@ for p in parquets:
         )
         mean_speed = float(speed.mean()) if speed is not None and not speed.empty else float("nan")
         max_speed = float(speed.max()) if speed is not None and not speed.empty else float("nan")
+        speed_95th_kmh = float(speed.quantile(0.95)) if speed is not None and not speed.empty else float("nan")
 
         # ── Distance (trapezoidal integration of speed) ────────────────────────
         if speed is not None and "elapsed_s" in df.columns:
@@ -127,8 +128,15 @@ for p in parquets:
             acc = pd.to_numeric(df["acc_ms2"], errors="coerce")
             mean_acc = float(acc.where(acc > 0).mean())  # NaN when no positive values
             mean_dec = float(acc.where(acc < 0).abs().mean())  # NaN when no negative values
+            
+            if distance_m > 0 and speed is not None and "elapsed_s" in df.columns:
+                acc_pos = acc.where(acc > 0, 0.0)
+                speed_ms = pd.to_numeric(speed, errors="coerce").fillna(0.0) / 3.6
+                rpa = float((speed_ms * acc_pos * dt).sum() / distance_m)
+            else:
+                rpa = float("nan")
         else:
-            mean_acc = mean_dec = float("nan")
+            mean_acc = mean_dec = rpa = float("nan")
 
         # ── Stop percentage ────────────────────────────────────────────────────
         total_samples = len(df) + len(mt.stop_samples)
@@ -151,8 +159,10 @@ for p in parquets:
                 "distance_m": round(distance_m, 1),
                 "mean_speed_kmh": round(mean_speed, 2),
                 "max_speed_kmh": round(max_speed, 2),
+                "speed_95th_kmh": round(speed_95th_kmh, 2),
                 "mean_acc_ms2": round(mean_acc, 4),
                 "mean_dec_ms2": round(mean_dec, 4),
+                "rpa": round(rpa, 4),
                 "stop_pct": stop_pct,
             }
         )

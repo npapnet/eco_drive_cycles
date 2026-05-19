@@ -220,7 +220,13 @@ print(f"  Saved: {vt_path}")
 
 # ── Markdown report ───────────────────────────────────────────────────────────
 mean_speed_cluster = cluster_df["mean_speed_kmh"].mean()
+std_speed_cluster = cluster_df["mean_speed_kmh"].std()
 mean_duration_cluster = cluster_df["duration_s"].mean()
+std_duration_cluster = cluster_df["duration_s"].std()
+mean_speed_95th_cluster = cluster_df["speed_95th_kmh"].mean()
+std_speed_95th_cluster = cluster_df["speed_95th_kmh"].std()
+mean_rpa_cluster = cluster_df["rpa"].mean()
+std_rpa_cluster = cluster_df["rpa"].std()
 
 _va_section = (
     f"## v-a Density Cloud\n\n![v-a density](figs-visualisation/cluster_{CLUSTER_ID}_va_density.png)\n"
@@ -236,12 +242,14 @@ report = f"""\
 
 ## Summary
 
-| Metric | Value |
+| Metric | Value (Mean ± Std) |
 | --- | --- |
 | Microtrips | {n_microtrips} |
 | Motion samples | {n_samples:,} |
-| Mean speed (km/h) | {mean_speed_cluster:.2f} |
-| Mean duration (s) | {mean_duration_cluster:.1f} |
+| Mean speed (km/h) | {mean_speed_cluster:.2f} ± {std_speed_cluster:.2f} |
+| Mean duration (s) | {mean_duration_cluster:.1f} ± {std_duration_cluster:.1f} |
+| 95th percentile speed (km/h) | {mean_speed_95th_cluster:.2f} ± {std_speed_95th_cluster:.2f} |
+| RPA (m/s²) | {mean_rpa_cluster:.4f} ± {std_rpa_cluster:.4f} |
 
 ## v-t Scatter Cloud
 
