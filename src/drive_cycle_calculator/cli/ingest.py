@@ -44,6 +44,21 @@ def ingest(
         "--force",
         help="Overwrite existing archive Parquets. Default: skip files that already exist.",
     ),
+    max_gap_s: float = typer.Option(
+        5.0,
+        "--max-gap-s",
+        help="Maximum allowable time gap in seconds. Gaps above this threshold trigger a warning.",
+    ),
+    strict_gaps: bool = typer.Option(
+        False,
+        "--strict-gaps",
+        help="Skip files with any time gap exceeding --max-gap-s (instead of just warning).",
+    ),
+    no_resample: bool = typer.Option(
+        False,
+        "--no-resample",
+        help="Disable 1 Hz resampling. Archive will contain raw timestamps.",
+    ),
 ) -> None:
     archive_dir = out_dir / "trips"
     archive_dir.mkdir(parents=True, exist_ok=True)
@@ -105,7 +120,9 @@ def ingest(
         typer.echo(f"No {format!r} files found in {raw_dir} — nothing to ingest.")
         raise typer.Exit()
 
-    typer.echo(f"  Found {len(files)} raw file(s).")
+    resample = not no_resample
+    resample_label = "1 Hz resampling" if resample else "raw timestamps (no resample)"
+    typer.echo(f"  Found {len(files)} raw file(s). Mode: {resample_label}, max_gap_s={max_gap_s}")
 
     ok = skipped = collisions = 0
     for f in sorted(files):
@@ -127,7 +144,19 @@ def ingest(
                 continue
             typer.secho(f"  OVERWRITE {dest.name}", fg=typer.colors.YELLOW)
 
-        obd.to_parquet(dest, user_metadata=user_metadata)
+        try:
+            obd.to_parquet(
+                dest,
+                user_metadata=user_metadata,
+                resample=resample,
+                max_gap_s=max_gap_s,
+                strict_gaps=strict_gaps,
+            )
+        except ValueError as exc:
+            typer.secho(f"  SKIPPED {f.name}: {exc}", fg=typer.colors.RED)
+            skipped += 1
+            continue
+
         ok += 1
         typer.secho(f"  OK     {f.name} → {dest.name}", fg=typer.colors.GREEN)
 
@@ -136,3 +165,4 @@ def ingest(
         typer.secho("  Tip: re-run with --force to overwrite existing files.", fg=typer.colors.YELLOW)
     if ok:
         typer.secho("Done. Run 'dcc extract' to compute metrics.", fg=typer.colors.GREEN)
+

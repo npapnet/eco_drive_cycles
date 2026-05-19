@@ -5,12 +5,15 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- `dcc ingest` — new `--max-gap-s` (default 5.0) and `--strict-gaps` flags for gap detection during ingest. Gaps > `max_gap_s` trigger warnings (or abort the file if strict).
+- `OBDFile.to_parquet()` — added 1 Hz resampling during archive creation to enforce a uniform time base. Tracks parameters in a new `IngestConfig` model embedded in the Parquet metadata.
 - `examples/workflow/060_select_representatives.py` — script to rank microtrips within clusters using similarity measures and visualize the top N candidates per cluster.
 
 ### Changed
 - `dcc ingest` — existing archive Parquets are now skipped by default with a yellow
   `EXISTS` warning and a collision count in the summary. Pass `--force` to overwrite.
   The `--format` / `-f` short alias is unchanged; `--force` has no short alias.
+- `OBDFile.to_parquet()` now enforces uniform 1 Hz time series by default. Uses mean-aggregation for downsampling (e.g. 5 Hz inputs) and linear interpolation / forward-filling for upsampling (jitter/gaps).
 
 ## [0.4.0] - 2026-05-03
 

@@ -1,18 +1,5 @@
 # Immediate steps
 
-## P1 — Resampling and Gap-Check During Ingestion
-- **Domain:** Data Ingestion / Signal Quality
-- **Effort:** S | **Impact:** H | **ROI:** High (Low-Hanging Fruit)
-- **Status:** 🏗️ Todo
-- **Dependencies:** None
-
-* **The 'Why' (Value):** Raw OBD data has irregular sampling. A uniform 1 s time base is assumed by all downstream calculations (segmentation uses sample count as a duration proxy at ~1 Hz). Gaps indicate sensor loss or engine restarts and must be flagged.
-* **The 'What' (Execution):**
-  - Resample raw data to a fixed 1 s frequency in `OBDFile.to_parquet()` before writing the archive Parquet.
-  - Add a configurable `max_gap_s` parameter (default 5 s). If exceeded: warn or abort based on a `--strict-gaps` CLI flag.
-  - Propagate the parameter through `dcc ingest`.
-* **Targets:** `src/drive_cycle_calculator/obd_file.py`, `src/drive_cycle_calculator/cli/ingest.py`.
-
 ---
 
 # ✅ Done in this sprint
@@ -215,6 +202,20 @@
 * **The 'What' (Execution):**
   - Add an optional fast path that reads pre-computed metrics directly from the DuckDB catalog instead of loading all DataFrames.
 * **Targets:** `src/drive_cycle_calculator/trip_collection.py`.
+
+---
+
+## P2 — Handle Different Column Names Across OS and Apps
+- **Domain:** Data Engineering / Ingestion
+- **Effort:** M | **Impact:** H | **ROI:** High
+- **Status:** 🏗️ Todo
+- **Dependencies:** None
+
+* **The 'Why' (Value):** Different OSes (iOS vs Android) and different apps (Torque vs others) export different column headers. For instance, Fytros iPhone data has `time`, `Vehicle speed (km/h)`, `Longtitude` instead of `GPS Time`, `Speed (OBD)(km/h)`, `Longitude`. We need a robust translation layer to map incoming data formats to the standardized `CURATED_COLS` expected by `OBDFile` to avoid manual pre-processing.
+* **The 'What' (Execution):**
+  - Implement a mapping mechanism (e.g., a dictionary or configuration file) that defines aliases for core columns.
+  - Apply this mapping automatically in `OBDFile` constructors (`from_csv`, `from_xlsx`) before validating columns.
+* **Targets:** `src/drive_cycle_calculator/obd_file.py`, `src/drive_cycle_calculator/schema.py`.
 
 ---
 
