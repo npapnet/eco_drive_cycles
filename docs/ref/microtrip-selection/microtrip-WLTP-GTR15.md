@@ -288,6 +288,9 @@ $$\text{RPA}_p = \frac{\sum_{i \in M_p} \text{RPA}_i \cdot d_i}{\sum_{i \in M_p}
 | `idle_fraction` | Absolute | ±0.03 | $\tau \pm 0.03$ |
 | `speed_95th_kmh` | Relative | ±5% | $\tau \times [0.95,\; 1.05]$ |
 
+
+TODO: Understand better how the tolerance bounds are used in this context and consider addigng  `distance_m` target 
+
 > **Note on idle_fraction lower bound:** For phases with very low idle (e.g. Med: $\tau \approx 0.015$),
 > the computed lower tolerance bound is negative (−0.015). This is mathematically valid — it means
 > any achieved idle fraction ≥ 0 satisfies the lower bound, so the metric is effectively one-sided
@@ -296,17 +299,20 @@ $$\text{RPA}_p = \frac{\sum_{i \in M_p} \text{RPA}_i \cdot d_i}{\sum_{i \in M_p}
 ### 4.3 Example Output — `phase_targets.csv`
 
 ```
-phase  n_microtrips  total_dist_m  mean_speed_kmh  rpa      idle_frac  v95_kmh
-Low    222           156 117       22.532          0.11107  0.1021     32.863
-Med    17            90 250        37.415          0.09438  0.0146     54.620
+phase  n_microtrips  total_dist_m  distance_m  mean_speed_kmh  rpa      idle_frac  v95_kmh
+Low    222           156 117       800.0       22.532          0.11107  0.1021     32.863
+Med    17            90 250        600.0       37.415          0.09438  0.0146     54.620
 ```
+
+`distance_m` is `phase_min_distance_m` from `config_wltp.json` — the design-intent distance for
+that phase. `total_distance_m` is the pool total (reference only, not used in validation).
 
 Tolerance columns (all stored in the CSV):
 
 ```
-phase  mean_speed_tol_lo  mean_speed_tol_hi  rpa_tol_lo  rpa_tol_hi  idle_tol_lo  idle_tol_hi  v95_tol_lo  v95_tol_hi
-Low    21.532             23.532             0.10552     0.11662     0.0721       0.1321       31.220      34.506
-Med    36.415             38.415             0.08966     0.09910    -0.0154       0.0446       51.889      57.351
+phase  mean_speed_tol_lo  mean_speed_tol_hi  rpa_tol_lo  rpa_tol_hi  idle_tol_lo  idle_tol_hi  v95_tol_lo  v95_tol_hi  dist_tol_lo  dist_tol_hi
+Low    21.532             23.532             0.10552     0.11662     0.0721       0.1321       31.220      34.506      792.0        inf
+Med    36.415             38.415             0.08966     0.09910    -0.0154       0.0446       51.889      57.351      594.0        inf
 ```
 
 ### 4.4 Conditions to Proceed
@@ -502,6 +508,7 @@ tolerance bounds stored in `phase_targets.csv`. The four checked metrics are:
 | `rpa` | $\tau_p$ | $0.95\,\tau_p \leq \widehat{\text{RPA}} \leq 1.05\,\tau_p$ |
 | `idle_fraction` | $\tau_p$ | $\tau_p - 0.03 \leq \hat{f} \leq \tau_p + 0.03$ |
 | `speed_95th_kmh` | $\tau_p$ | $0.95\,\tau_p \leq \hat{v}_{95} \leq 1.05\,\tau_p$ |
+| `distance_m` | `phase_min_distance_m` | $\hat{d} \geq 0.99 \times d_{target}$ (no upper cap) |
 
 ### 6.5 Example `validation_report.md`
 
@@ -511,22 +518,24 @@ tolerance bounds stored in `phase_targets.csv`. The four checked metrics are:
 ## Phase: Low
 - Duration: 185 s  |  Distance: 976.2 m
 
-| Metric          | Target  | Tol lo  | Tol hi  | Achieved | Pass |
+| Metric          | Target   | Tol lo   | Tol hi   | Achieved | Pass |
 |---|---|---|---|---|---|
-| mean_speed_kmh  | 22.5320 | 21.5320 | 23.5320 | 20.9360  | ✗ |
-| rpa             | 0.1111  | 0.1055  | 0.1166  | 0.1177   | ✗ |
-| idle_fraction   | 0.1021  | 0.0721  | 0.1321  | 0.0919   | ✓ |
-| speed_95th_kmh  | 32.8630 | 31.2199 | 34.5061 | 37.2500  | ✗ |
+| mean_speed_kmh  | 22.5320  | 21.5320  | 23.5320  | 20.9360  | ✗ |
+| rpa             | 0.1111   | 0.1055   | 0.1166   | 0.1177   | ✗ |
+| idle_fraction   | 0.1021   | 0.0721   | 0.1321   | 0.0919   | ✓ |
+| speed_95th_kmh  | 32.8630  | 31.2199  | 34.5061  | 37.2500  | ✗ |
+| distance_m      | 800.0    | 792.0    | inf      | 976.2    | ✓ |
 
 ## Phase: Med
 - Duration: 232 s  |  Distance: 2554.3 m
 
-| Metric          | Target  | Tol lo  | Tol hi  | Achieved | Pass |
+| Metric          | Target   | Tol lo   | Tol hi   | Achieved | Pass |
 |---|---|---|---|---|---|
-| mean_speed_kmh  | 37.4150 | 36.4150 | 38.4150 | 40.1640  | ✗ |
-| rpa             | 0.0944  | 0.0897  | 0.0991  | 0.0965   | ✓ |
-| idle_fraction   | 0.0146  | -0.0154 | 0.0446  | 0.0129   | ✓ |
-| speed_95th_kmh  | 54.6200 | 51.8890 | 57.3510 | 53.8620  | ✓ |
+| mean_speed_kmh  | 37.4150  | 36.4150  | 38.4150  | 40.1640  | ✗ |
+| rpa             | 0.0944   | 0.0897   | 0.0991   | 0.0965   | ✓ |
+| idle_fraction   | 0.0146   | -0.0154  | 0.0446   | 0.0129   | ✓ |
+| speed_95th_kmh  | 54.6200  | 51.8890  | 57.3510  | 53.8620  | ✓ |
+| distance_m      | 600.0    | 594.0    | inf      | 2554.3   | ✓ |
 
 **Overall: FAIL ✗ — re-run 140_wltp_selection.py**
 ```
@@ -535,12 +544,13 @@ tolerance bounds stored in `phase_targets.csv`. The four checked metrics are:
 
 When a metric fails, the sign and magnitude of the deviation guides the fix:
 
-| Metric | Achieved < Target | Achieved > Target |
+| Metric | Achieved < Target (FAIL) | Achieved > Target |
 |---|---|---|
 | `mean_speed_kmh` | Selected microtrips are too slow on average | Selected microtrips are too fast on average |
 | `rpa` | Sequence has too little positive acceleration work | Too aggressive acceleration |
 | `idle_fraction` | Too little idle time (mostly motion) | Too much idle time (heavy stop-and-go) |
 | `speed_95th_kmh` | Sequence lacks high-speed events | Peak speeds too high |
+| `distance_m` | Assembled phase covers < 99% of the minimum target distance — data quality issue (very short microtrips?) | Expected; assembly always overshoots slightly |
 
 **Systematic remedies:**
 
