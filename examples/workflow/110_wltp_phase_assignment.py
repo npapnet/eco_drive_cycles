@@ -27,9 +27,9 @@ SYNTHESIS_DIR = OUTPUT_DIR / "synthesis"
 
 # GTR 15 §2.1 — fixed phase boundaries (km/h); lower bound exclusive, upper inclusive
 PHASE_BOUNDARIES = [
-    ("Low",    0.0,   56.5),
-    ("Med",   56.5,   76.6),
-    ("High",  76.6,   97.4),
+    ("Low", 0.0, 56.5),
+    ("Med", 56.5, 76.6),
+    ("High", 76.6, 97.4),
     ("xHigh", 97.4, float("inf")),
 ]
 BOUNDARY_SPEEDS = [56.5, 76.6, 97.4]
@@ -50,12 +50,14 @@ if "max_speed_kmh" not in df.columns:
     print("ERROR: 'max_speed_kmh' column missing — re-run 03_build_microtrips.py.")
     raise SystemExit(1)
 
+
 # ── Phase assignment ───────────────────────────────────────────────────────────
 def _assign_phase(v: float) -> str:
     for label, lo, hi in PHASE_BOUNDARIES:
         if lo < v <= hi:
             return label
     return "Low"  # v == 0 edge case
+
 
 df["phase"] = df["max_speed_kmh"].apply(_assign_phase)
 
