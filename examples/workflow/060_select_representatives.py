@@ -80,7 +80,7 @@ MICROTRIPS_DIR = OUTPUT_DIR / "microtrips/"
 summary_clustered_path = MICROTRIPS_DIR / "summary_clustered.csv"
 if not summary_clustered_path.exists():
     print(f"Error: Could not find {summary_clustered_path}")
-    print("Please run 04_microtrip_clustering.py first.")
+    print("Please run 040_microtrip_clustering.py first.")
     raise SystemExit(1)
 
 df = pd.read_csv(summary_clustered_path)

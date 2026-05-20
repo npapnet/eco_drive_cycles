@@ -43,7 +43,7 @@ CLUSTER_IDS: list[int] | None = None
 summary_path = MICROTRIPS_DIR / "summary_clustered.csv"
 if not summary_path.exists():
     print(f"Summary not found: {summary_path}")
-    print("Run 04_microtrip_clustering.py (or 040_*) first.")
+    print("Run 040_microtrip_clustering.py first.")
     raise SystemExit(1)
 
 df_summary = pd.read_csv(summary_path)

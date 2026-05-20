@@ -71,16 +71,16 @@ for f in raw_files:
     dest = archive_dir / f"{obd.parquet_name}.parquet"
 
     if dest.exists() and not FORCE:
-        print(f"  EXISTS {f.name} → {dest.name}  (skipped)")
+        print(f"  EXISTS {f.name} -> {dest.name}  (skipped)")
         skipped += 1
         continue
 
     obd.to_parquet(dest, user_metadata=USER_METADATA)
-    print(f"  OK     {f.name} → {dest.name}")
+    print(f"  OK     {f.name} -> {dest.name}")
     ok += 1
 
 print(f"\nDone: {ok} archived, {skipped} skipped (already exist), {failed} failed.")
 if skipped:
     print("  Tip: set FORCE = True at the top of this script to overwrite.")
 if ok:
-    print("  Next: run 02_extract_analyze.py")
+    print("  Next: run 020_extract_analyze.py")

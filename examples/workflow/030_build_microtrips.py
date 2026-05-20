@@ -11,7 +11,7 @@ A microtrip is one stop-to-stop motion segment.  The trailing stop is
 included in each segment's parquet (stop_phase column = True).
 
 META_COLS lists identifier columns that are excluded from clustering features
-in 04_microtrip_clustering.py.  Every other column in summary.csv is treated
+in 040_microtrip_clustering.py.  Every other column in summary.csv is treated
 as a numeric feature.
 
 Configuration is read from config.json in the same directory as this script.
@@ -38,7 +38,7 @@ _cfg = json.loads((Path(__file__).parent / "config.json").read_text())
 OUTPUT_DIR = ROOTDIR / _cfg["output_dir"]  # must contain a trips/ sub-folder of Parquets
 
 # Columns that identify a microtrip but are not clustering features.
-# Keep in sync with the same constant in 04_microtrip_clustering.py.
+# Keep in sync with the same constant in 040_microtrip_clustering.py.
 META_COLS = frozenset(
     {"trip_id", "parquet_id", "microtrip_index", "filename", "motion_samples", "stop_samples"}
 )
@@ -64,7 +64,7 @@ microtrips_dir = OUTPUT_DIR / "microtrips"
 
 if not trips_dir.is_dir():
     print(f"No trips/ directory found under {OUTPUT_DIR}.")
-    print("Run 01_ingest.py first.")
+    print("Run 010_ingest.py first.")
     raise SystemExit(1)
 
 microtrips_dir.mkdir(parents=True, exist_ok=True)

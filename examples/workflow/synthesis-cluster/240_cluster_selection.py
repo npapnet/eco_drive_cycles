@@ -28,9 +28,9 @@ import numpy as np
 import pandas as pd
 
 # ── Config ─────────────────────────────────────────────────────────────────────
-ROOTDIR = Path(__file__).parents[2]
-_cfg  = json.loads((Path(__file__).parent / "config.json").read_text())
-_syn  = json.loads((Path(__file__).parent / "config_syn_cluster.json").read_text())
+ROOTDIR = Path(__file__).parents[3]
+_cfg  = json.loads((Path(__file__).parent.parent / "config.json").read_text())
+_syn  = json.loads((Path(__file__).parent.parent / "config_syn_cluster.json").read_text())
 
 OUTPUT_DIR    = ROOTDIR / _cfg["output_dir"]
 SYNTHESIS_DIR = OUTPUT_DIR / "synthesis-cluster"
@@ -64,10 +64,13 @@ if "total_duration_s" not in clustered_df.columns:
     clustered_df["total_duration_s"] = clustered_df["duration_s"] + clustered_df["stop_duration_s"]
 if "idle_fraction" not in clustered_df.columns:
     clustered_df["idle_fraction"] = (
-        clustered_df["stop_duration_s"] / clustered_df["total_duration_s"].replace(0.0, float("nan"))
+        clustered_df["stop_duration_s"]
+        / clustered_df["total_duration_s"].replace(0.0, float("nan"))
     )
 
-clustered_df = clustered_df.merge(dist_df[["filename", "markov_distance"]], on="filename", how="left")
+clustered_df = clustered_df.merge(
+    dist_df[["filename", "markov_distance"]], on="filename", how="left"
+)
 clustered_df["markov_distance"] = clustered_df["markov_distance"].fillna(1.0)
 
 cluster_order = sorted(clustered_df["cluster_id"].unique(), key=lambda x: str(x))
@@ -86,11 +89,12 @@ def _seq_stats(seq_df: pd.DataFrame) -> dict[str, float]:
         if len(rpa_ok) > 0 else 0.0
     )
 
+    dur = seq_df["total_duration_s"]
     return {
-        "mean_speed_kmh": float((seq_df["mean_speed_kmh"] * seq_df["total_duration_s"]).sum() / s_dur),
+        "mean_speed_kmh": float((seq_df["mean_speed_kmh"] * dur).sum() / s_dur),
         "rpa":            rpa,
-        "idle_fraction":  float((seq_df["idle_fraction"].fillna(0) * seq_df["total_duration_s"]).sum() / s_dur),
-        "speed_95th_kmh": float((seq_df["speed_95th_kmh"] * seq_df["total_duration_s"]).sum() / s_dur),
+        "idle_fraction":  float((seq_df["idle_fraction"].fillna(0) * dur).sum() / s_dur),
+        "speed_95th_kmh": float((seq_df["speed_95th_kmh"] * dur).sum() / s_dur),
     }
 
 
@@ -174,7 +178,7 @@ for cluster in cluster_order:
 
     targets = targets_df.loc[str(cluster)].to_dict()
 
-    print(f"  Cluster {cluster}: {len(cluster_df)} microtrips, min dist {MIN_DIST_M:.0f} m …",
+    print(f"  Cluster {cluster}: {len(cluster_df)} microtrips, min dist {MIN_DIST_M:.0f} m ...",
           end=" ", flush=True)
 
     iloc_seq, best_F, n_run, converged = _select_cluster(cluster_df, targets, rng)
@@ -201,5 +205,6 @@ report_df = pd.DataFrame(report_rows)
 report_df.to_csv(SYNTHESIS_DIR / "selection_report.csv", index=False)
 
 print("\nSelection summary:")
-print(report_df[["cluster_id", "F_c", "n_microtrips_selected", "total_distance_m", "converged"]].to_string(index=False))
+cols = ["cluster_id", "F_c", "n_microtrips_selected", "total_distance_m", "converged"]
+print(report_df[cols].to_string(index=False))
 # %%

@@ -39,13 +39,13 @@ SCRIPT_DIR = Path(__file__).parent
 
 for step in STEPS:
     script = SCRIPT_DIR / step
-    print(f"\n{'─' * 60}")
+    print(f"\n{'-' * 60}")
     print(f"  {step}")
-    print("─" * 60)
+    print("-" * 60)
     result = subprocess.run([sys.executable, str(script)], check=False)
     if result.returncode != 0:
-        print(f"\n✗  {step} failed (exit {result.returncode}) — pipeline aborted.")
+        print(f"\n[ERROR]  {step} failed (exit {result.returncode}) - pipeline aborted.")
         sys.exit(result.returncode)
 
-print("\n✓  Cluster synthesis complete — outputs in data/synthesis-cluster/")
+print("\n[SUCCESS]  Cluster synthesis complete - outputs in data/synthesis-cluster/")
 # %%

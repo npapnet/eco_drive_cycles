@@ -28,9 +28,9 @@ import numpy as np
 import pandas as pd
 
 # ── Config ─────────────────────────────────────────────────────────────────────
-ROOTDIR = Path(__file__).parents[2]
-_cfg  = json.loads((Path(__file__).parent / "config.json").read_text())
-_wltp = json.loads((Path(__file__).parent / "config_wltp.json").read_text())
+ROOTDIR = Path(__file__).parents[3]
+_cfg  = json.loads((Path(__file__).parent.parent / "config.json").read_text())
+_wltp = json.loads((Path(__file__).parent.parent / "config_wltp.json").read_text())
 
 OUTPUT_DIR    = ROOTDIR / _cfg["output_dir"]
 SYNTHESIS_DIR = OUTPUT_DIR / "synthesis"
@@ -83,11 +83,12 @@ def _seq_stats(seq_df: pd.DataFrame) -> dict[str, float]:
         if len(rpa_ok) > 0 else 0.0
     )
 
+    dur = seq_df["total_duration_s"]
     return {
-        "mean_speed_kmh": float((seq_df["mean_speed_kmh"] * seq_df["total_duration_s"]).sum() / s_dur),
+        "mean_speed_kmh": float((seq_df["mean_speed_kmh"] * dur).sum() / s_dur),
         "rpa":            rpa,
-        "idle_fraction":  float((seq_df["idle_fraction"].fillna(0) * seq_df["total_duration_s"]).sum() / s_dur),
-        "speed_95th_kmh": float((seq_df["speed_95th_kmh"] * seq_df["total_duration_s"]).sum() / s_dur),
+        "idle_fraction":  float((seq_df["idle_fraction"].fillna(0) * dur).sum() / s_dur),
+        "speed_95th_kmh": float((seq_df["speed_95th_kmh"] * dur).sum() / s_dur),
     }
 
 
@@ -171,12 +172,16 @@ for phase in PHASE_ORDER:
     targets   = targets_df.loc[phase].to_dict()
     min_dist  = float(MIN_DIST.get(phase, 600))
 
-    print(f"  {phase}: {len(phase_df)} microtrips, min dist {min_dist:.0f} m …", end=" ", flush=True)
+    print(
+        f"  {phase}: {len(phase_df)} microtrips, min dist {min_dist:.0f} m ...",
+        end=" ",
+        flush=True,
+    )
 
     iloc_seq, best_F, n_run, converged = _select_phase(phase_df, targets, min_dist, rng)
 
     status = "converged" if converged else f"best F={best_F:.5f}"
-    print(f"{n_run} trials — {status}")
+    print(f"{n_run} trials - {status}")
 
     out_df = phase_df.iloc[iloc_seq].copy()
     out_df.insert(0, "sequence_position", range(len(iloc_seq)))
@@ -197,5 +202,6 @@ report_df = pd.DataFrame(report_rows)
 report_df.to_csv(SYNTHESIS_DIR / "selection_report.csv", index=False)
 
 print("\nSelection summary:")
-print(report_df[["phase", "F_p", "n_microtrips_selected", "total_distance_m", "converged"]].to_string(index=False))
+cols = ["phase", "F_p", "n_microtrips_selected", "total_distance_m", "converged"]
+print(report_df[cols].to_string(index=False))
 # %%

@@ -24,15 +24,15 @@ import json
 import math
 from pathlib import Path
 
-import matplotlib.pyplot as plt
 import matplotlib.cm as cm
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
 # ── Config ─────────────────────────────────────────────────────────────────────
-ROOTDIR = Path(__file__).parents[2]
-_cfg = json.loads((Path(__file__).parent / "config.json").read_text())
-_syn = json.loads((Path(__file__).parent / "config_syn_cluster.json").read_text())
+ROOTDIR = Path(__file__).parents[3]
+_cfg = json.loads((Path(__file__).parent.parent / "config.json").read_text())
+_syn = json.loads((Path(__file__).parent.parent / "config_syn_cluster.json").read_text())
 
 OUTPUT_DIR     = ROOTDIR / _cfg["output_dir"]
 MICROTRIPS_DIR = OUTPUT_DIR / "microtrips"
@@ -97,7 +97,7 @@ print(f"Found sequences for clusters: {cluster_order}")
 # ── Load targets ───────────────────────────────────────────────────────────────
 targets_path = SYNTHESIS_DIR / "cluster_targets.csv"
 if not targets_path.exists():
-    print(f"cluster_targets.csv not found. Run 230_cluster_targets.py first.")
+    print("cluster_targets.csv not found. Run 230_cluster_targets.py first.")
     raise SystemExit(1)
 
 targets_df = pd.read_csv(targets_path, index_col="cluster_id")
@@ -126,7 +126,7 @@ for cluster in cluster_order:
     cluster_v = np.concatenate(traces) if traces else np.empty(0, dtype=float)
     cluster_segments.append({"cluster_id": cluster, "v": cluster_v})
     print(
-        f"  Cluster {cluster}: {len(seq_df)} microtrips → "
+        f"  Cluster {cluster}: {len(seq_df)} microtrips -> "
         f"{len(cluster_v)} samples ({len(cluster_v) / 60:.1f} min)"
     )
 
@@ -191,9 +191,11 @@ for start, end, cid in cluster_spans:
 md = ["# Cluster Synthesis — Validation Report\n"]
 for v in validation:
     cid = v["cluster_id"]
-    a   = v["achieved"]
     md.append(f"## Cluster: {cid}")
-    md.append(f"- Duration: {a.get('duration_s', '?')} s  |  Distance: {a.get('distance_m', '?')} m\n")
+    a   = v["achieved"]
+    dur = a.get("duration_s", "?")
+    dst = a.get("distance_m", "?")
+    md.append(f"- Duration: {dur} s  |  Distance: {dst} m\n")
     md.append("| Metric | Target | Tol lo | Tol hi | Achieved | Pass |")
     md.append("|---|---|---|---|---|---|")
     for c in v["checks"]:

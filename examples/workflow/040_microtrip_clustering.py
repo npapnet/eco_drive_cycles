@@ -2,7 +2,7 @@
 """
 Step 4 — Cluster microtrips by their numeric features.
 
-1. Loads the summary CSV produced by 03_build_microtrips.py.
+1. Loads the summary CSV produced by 030_build_microtrips.py.
 2. Auto-detects feature columns: every column NOT in META_COLS is treated as a
    numeric feature.  Adding new metrics to 03 automatically includes them here.
 3. Runs the elbow method to help choose N_CLUSTERS.
@@ -34,7 +34,7 @@ FIGS_DIR.mkdir(exist_ok=True, parents=True)
 
 
 # Identifier columns — excluded from clustering features.
-# Keep in sync with the same constant in 03_build_microtrips.py.
+# Keep in sync with the same constant in 030_build_microtrips.py.
 META_COLS = frozenset(
     {"trip_id", "parquet_id", "microtrip_index", "filename", "motion_samples", "stop_samples"}
 )

@@ -45,7 +45,7 @@ db_path = OUTPUT_DIR / "metrics.duckdb"
 
 if not trips_dir.is_dir():
     print(f"No trips/ directory found under {OUTPUT_DIR}.")
-    print("Run 01_ingest.py first.")
+    print("Run 010_ingest.py first.")
     raise SystemExit(1)
 
 parquets = sorted(trips_dir.glob("*.parquet"))
@@ -216,6 +216,6 @@ with md_path.open("w", encoding="utf-8") as fh:
     fh.write(f"| Mean deceleration | {m['mean_dec']:.3f} m/s² |\n")
 
 print(f"\nOutput written to {out_dir}")
-print("  Next: run 03_microtrips.py")
+print("  Next: run 030_build_microtrips.py")
 
 # %%

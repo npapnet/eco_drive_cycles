@@ -1,30 +1,34 @@
 # Examples
 
-Three-step workflow from raw OBD data to microtrip segments.
+Complete workflow from raw OBD data to microtrip segments and synthesized drive cycles.
 
 ```
 Step 1:  ingest raw .xlsx / .csv → archive Parquets
 Step 2:  extract metrics → DuckDB + similarity report
 Step 3:  segment trips → microtrip Parquets + summary
+Step 4:  cluster microtrips → data-driven KMeans clustering
+Step 5:  synthesize drive cycles → via WLTP (GTR 15) or Cluster-based synthesis
 ```
 
 ## Workflow
 
 ```bash
-# Step 1: ingest raw OBD files
-uv run python examples/workflow/01_ingest.py
+# Step 1: Ingest raw OBD files
+uv run python examples/workflow/010_ingest.py
 
-# Step 2: compute metrics and run similarity analysis
-uv run python examples/workflow/02_extract_analyze.py
+# Step 2: Compute metrics and run similarity analysis
+uv run python examples/workflow/020_extract_analyze.py
 
-# Step 3: segment trips into microtrips
-uv run python examples/workflow/03_microtrips.py
+# Step 3: Segment trips into microtrips
+uv run python examples/workflow/030_build_microtrips.py
+
+# Step 4: Cluster microtrips
+uv run python examples/workflow/040_microtrip_clustering.py
 ```
 
-Edit the constants at the top of each script (`DATA_DIR`, `OUTPUT_DIR`, etc.)
-to point at your data. See [workflow/README.md](workflow/README.md) for details.
+Parameters, input directories, and output folders are managed in `examples/workflow/config.json`. See [workflow/README.md](workflow/README.md) for details.
 
-## GUI example
+## GUI Example
 
 ```bash
 python examples/gui/main.py
@@ -32,7 +36,7 @@ python examples/gui/main.py
 
 Tkinter app with folder picker and embedded Matplotlib chart. See [gui/README.md](gui/README.md).
 
-## Storage layout
+## Storage Layout
 
 ```
 data/
@@ -52,5 +56,4 @@ data/
 
 ## Note on DriveGUI
 
-`students/DriveGUI/` is **frozen** — a self-contained historical reference with no package
-dependencies. This `examples/` directory is its active successor.
+`students/DriveGUI/` is **frozen** — a self-contained historical reference with no package dependencies. This `examples/` directory is its active successor.

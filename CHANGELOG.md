@@ -14,6 +14,14 @@ All notable changes to this project will be documented in this file.
   `EXISTS` warning and a collision count in the summary. Pass `--force` to overwrite.
   The `--format` / `-f` short alias is unchanged; `--force` has no short alias.
 - `OBDFile.to_parquet()` now enforces uniform 1 Hz time series by default. Uses mean-aggregation for downsampling (e.g. 5 Hz inputs) and linear interpolation / forward-filling for upsampling (jitter/gaps).
+- Reorganized `examples/` workflow directory structure:
+  - Consolidated all workflow scripts and downstream synthesis pipelines under `examples/workflow/`.
+  - Renamed core pipeline scripts from `0d_*.py` format to `0d0_*.py` (e.g. `010_ingest.py` through `040_microtrip_clustering.py`).
+  - Grouped WLTP-based synthesis scripts into `examples/workflow/synthesis-wltp/` subfolder.
+  - Grouped Cluster-based synthesis scripts into `examples/workflow/synthesis-cluster/` subfolder.
+  - Co-located all configuration files (`config.json`, `config_wltp.json`, `config_syn_cluster.json`) in `examples/workflow/` directory.
+  - Refactored scripts to resolve configs relative to `Path(__file__)` and run seamlessly in the new nested directory structure.
+  - Updated console output messages across all workflow scripts to use standard ASCII symbols (`->`, `...`) to prevent `UnicodeEncodeError` in Windows consoles.
 
 ## [0.4.0] - 2026-05-03
 

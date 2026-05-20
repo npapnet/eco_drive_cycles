@@ -2,9 +2,8 @@
 """
 Step 050 — Cluster visualisation: v-t scatter cloud and v-a density hexbin.
 
-Reads the clustered summary CSV produced by 040_microtrip_clustering.py (or
-04_microtrip_clustering.py) and the per-microtrip Parquet files produced by
-030_build_microtrips.py / 03_build_microtrips.py.
+Reads the clustered summary CSV produced by 040_microtrip_clustering.py and the per-microtrip Parquet files produced by
+030_build_microtrips.py.
 
 Two figures are produced:
 
@@ -92,7 +91,7 @@ ENABLE_VA_DENSITY: bool = True
 summary_path = MICROTRIPS_DIR / "summary_clustered.csv"
 if not summary_path.exists():
     print(f"Summary not found: {summary_path}")
-    print("Run 04_microtrip_clustering.py (or 040_*) first.")
+    print("Run 040_microtrip_clustering.py first.")
     raise SystemExit(1)
 
 df_summary = pd.read_csv(summary_path)

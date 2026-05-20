@@ -27,9 +27,9 @@ import numpy as np
 import pandas as pd
 
 # ── Config ─────────────────────────────────────────────────────────────────────
-ROOTDIR = Path(__file__).parents[2]
-_cfg = json.loads((Path(__file__).parent / "config.json").read_text())
-_wltp = json.loads((Path(__file__).parent / "config_wltp.json").read_text())
+ROOTDIR = Path(__file__).parents[3]
+_cfg = json.loads((Path(__file__).parent.parent / "config.json").read_text())
+_wltp = json.loads((Path(__file__).parent.parent / "config_wltp.json").read_text())
 
 OUTPUT_DIR = ROOTDIR / _cfg["output_dir"]
 MICROTRIPS_DIR = OUTPUT_DIR / "microtrips"
@@ -84,7 +84,7 @@ def _phase_stats(v: np.ndarray) -> dict:
 # ── Load targets ───────────────────────────────────────────────────────────────
 targets_path = SYNTHESIS_DIR / "phase_targets.csv"
 if not targets_path.exists():
-    print(f"phase_targets.csv not found. Run 130_wltp_phase_targets.py first.")
+    print("phase_targets.csv not found. Run 130_wltp_phase_targets.py first.")
     raise SystemExit(1)
 
 targets_df = pd.read_csv(targets_path, index_col="phase")
@@ -111,7 +111,8 @@ for phase in PHASE_ORDER:
     phase_v = np.concatenate(traces) if traces else np.empty(0, dtype=float)
     phase_segments.append({"phase": phase, "v": phase_v})
     print(
-        f"  {phase}: {len(seq_df)} microtrips → {len(phase_v)} samples ({len(phase_v) / 60:.1f} min)"
+        f"  {phase}: {len(seq_df)} microtrips -> {len(phase_v)} samples "
+        f"({len(phase_v) / 60:.1f} min)"
     )
 
 if not phase_segments:
