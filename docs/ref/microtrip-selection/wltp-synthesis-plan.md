@@ -24,20 +24,20 @@ directory `data/synthesis/`.
 
 ```
 data/synthesis/
-├── microtrips_phased.csv          ← step 010  phase label + boundary flag per microtrip
+├── microtrips_phased.csv          ← step 110  phase label + boundary flag per microtrip
 ├── markov/
-│   ├── global_matrix.csv          ← step 020  T[from_state, to_state]
-│   └── microtrip_distances.csv    ← step 020  D(T_i, T) per microtrip (Frobenius)
-├── phase_targets.csv              ← step 030  τ_p: weighted-mean targets per phase
+│   ├── global_matrix.csv          ← step 120  T[from_state, to_state]
+│   └── microtrip_distances.csv    ← step 120  D(T_i, T) per microtrip (Frobenius)
+├── phase_targets.csv              ← step 130  τ_p: weighted-mean targets per phase
 ├── selected/
-│   ├── phase_Low_sequence.csv     ← step 040  selected microtrip list for Low phase
+│   ├── phase_Low_sequence.csv     ← step 140  selected microtrip list for Low phase
 │   ├── phase_Med_sequence.csv
 │   ├── phase_High_sequence.csv
 │   └── phase_xHigh_sequence.csv
-├── selection_report.csv           ← step 040  F_p score and convergence info per phase
-├── final_cycle.csv                ← step 050  v(t) at 1 Hz, full assembled cycle
-├── final_cycle.png                ← step 050  speed–time plot
-└── validation_report.md           ← step 050  per-phase tolerance checks
+├── selection_report.csv           ← step 140  F_p score and convergence info per phase
+├── final_cycle.csv                ← step 150  v(t) at 1 Hz, full assembled cycle
+├── final_cycle.png                ← step 150  speed–time plot
+└── validation_report.md           ← step 150  per-phase tolerance checks
 ```
 
 ---
@@ -46,16 +46,16 @@ data/synthesis/
 
 | Script | GTR15 section | Input | Key output |
 |---|---|---|---|
-| `100_wltp_010_phase_assignment.py` | §2 | `microtrips/summary.csv` | `synthesis/microtrips_phased.csv` |
-| `100_wltp_020_markov_chain.py` | §3 | `microtrips/*.parquet` | `synthesis/markov/` |
-| `100_wltp_030_phase_targets.py` | §4 | `synthesis/microtrips_phased.csv` | `synthesis/phase_targets.csv` |
-| `100_wltp_040_selection.py` | §5 | phased, markov, targets | `synthesis/selected/` |
-| `100_wltp_050_assembly.py` | §6 | selected sequences + parquets | `synthesis/final_cycle.*` |
-| `100_microtrips_synthesis_wltp.py` | all | — | orchestrator |
+| `100_microtrips_synthesis_wltp.py` | all | — | orchestrator (runs 110–150 in sequence) |
+| `110_wltp_phase_assignment.py` | §2 | `microtrips/summary.csv` | `synthesis/microtrips_phased.csv` |
+| `120_wltp_markov_chain.py` | §3 | `microtrips/*.parquet` | `synthesis/markov/` |
+| `130_wltp_phase_targets.py` | §4 | `synthesis/microtrips_phased.csv` | `synthesis/phase_targets.csv` |
+| `140_wltp_selection.py` | §5 | phased, markov, targets | `synthesis/selected/` |
+| `150_wltp_assembly.py` | §6 | selected sequences + parquets | `synthesis/final_cycle.*` |
 
 ---
 
-## Step 010 — Phase Assignment (`microtrip-WLTP-GTR15.md` §2)
+## Step 110 — Phase Assignment (`microtrip-WLTP-GTR15.md` §2)
 
 **Input:** `data/microtrips/summary.csv` (`max_speed_kmh` column already computed by step 03)
 
@@ -77,7 +77,7 @@ during optimization.
 
 ---
 
-## Step 020 — Markov Chain Construction (`microtrip-WLTP-GTR15.md` §3)
+## Step 120 — Markov Chain Construction (`microtrip-WLTP-GTR15.md` §3)
 
 **Input:** every `data/microtrips/<trip>_mt*.parquet` (filenames from `summary.csv`)
 
@@ -105,7 +105,7 @@ shared "from" states so distances are comparable across microtrips of different 
 
 ---
 
-## Step 030 — Phase Targets (`microtrip-WLTP-GTR15.md` §4)
+## Step 130 — Phase Targets (`microtrip-WLTP-GTR15.md` §4)
 
 **Input:** `synthesis/microtrips_phased.csv`
 
@@ -137,7 +137,7 @@ plus tolerance columns (`±1 km/h` mean speed, `±5%` RPA, `±3%` idle fraction)
 
 ---
 
-## Step 040 — Stochastic Microtrip Selection (`microtrip-WLTP-GTR15.md` §5)
+## Step 140 — Stochastic Microtrip Selection (`microtrip-WLTP-GTR15.md` §5)
 
 **Input:**
 - `synthesis/microtrips_phased.csv` (phase membership)
@@ -181,7 +181,7 @@ plus tolerance columns (`±1 km/h` mean speed, `±5%` RPA, `±3%` idle fraction)
 
 ---
 
-## Step 050 — Cycle Assembly and Validation (`microtrip-WLTP-GTR15.md` §6)
+## Step 150 — Cycle Assembly and Validation (`microtrip-WLTP-GTR15.md` §6)
 
 **Input:**
 - `synthesis/selected/phase_*_sequence.csv`
@@ -210,32 +210,53 @@ metric per phase.
 
 ---
 
-## Configuration additions to `config.json`
+## Configuration — `config_wltp.json`
+
+WLTP synthesis parameters live in a **separate** `examples/workflow/config_wltp.json`,
+not in the shared `config.json`. Each step script reads both files independently,
+so every script can be run standalone without the orchestrator.
+
+`config.json` is still read by all steps for `output_dir` (to locate `data/`).
 
 ```json
-"wltp": {
-    "speed_bin_width_kmh": 10,
-    "acc_bin_width_ms2": 0.2,
-    "acc_range_ms2": 1.5,
-    "markov_lambda": 1.0,
-    "n_trials": 1000,
-    "f_threshold": 0.01,
-    "max_reuse_fraction": 0.30,
-    "inter_phase_idle_s": 20,
-    "phase_min_distance_m": {
-        "Low": 800,
-        "Med": 600,
-        "High": 600,
-        "xHigh": 1000
-    },
-    "metric_weights": {
-        "mean_speed_kmh": 1.0,
-        "rpa": 2.0,
-        "idle_fraction": 0.5,
-        "speed_95th_kmh": 0.5
-    }
+{
+  "speed_bin_width_kmh": 10,
+  "acc_bin_width_ms2": 0.2,
+  "acc_range_ms2": 1.5,
+  "markov_lambda": 1.0,
+  "n_trials": 1000,
+  "f_threshold": 0.01,
+  "max_reuse_fraction": 0.30,
+  "inter_phase_idle_s": 20,
+  "random_seed": 42,
+  "phase_min_distance_m": {
+    "Low": 800,
+    "Med": 600,
+    "High": 600,
+    "xHigh": 1000
+  },
+  "metric_weights": {
+    "mean_speed_kmh": 1.0,
+    "rpa": 2.0,
+    "idle_fraction": 0.5,
+    "speed_95th_kmh": 0.5
+  }
 }
 ```
+
+| Parameter | Default | Notes |
+|---|---|---|
+| `speed_bin_width_kmh` | 10 | Coarse binning recommended for < 400 microtrips |
+| `acc_bin_width_ms2` | 0.2 | GTR 15 recommends 0.1; use 0.2 for small datasets |
+| `acc_range_ms2` | 1.5 | Accelerations outside ±1.5 m/s² are clamped |
+| `markov_lambda` | 1.0 | Higher → stronger preference for Markov-similar microtrips |
+| `n_trials` | 1000 | Increase to 2000 for small phase pools |
+| `f_threshold` | 0.01 | Objective value for early-exit (1% aggregate deviation) |
+| `max_reuse_fraction` | 0.30 | A single microtrip may not exceed 30% of phase duration |
+| `inter_phase_idle_s` | 20 | Idle gap inserted between phases in the final cycle |
+| `random_seed` | 42 | Reproducibility seed for stochastic selection |
+| `phase_min_distance_m` | varies | Minimum assembled distance per phase |
+| `metric_weights` | varies | Objective weighting; RPA weighted 2× as primary energy proxy |
 
 ---
 
@@ -243,20 +264,20 @@ metric per phase.
 
 ```
 summary.csv
-    └── 010_phase_assignment ─────────────────────────────────┐
+    └── 110_phase_assignment ─────────────────────────────────┐
                                                                │
     microtrips/*.parquet                                       │
-        └── 020_markov_chain ─────────────────────────────┐   │
+        └── 120_markov_chain ─────────────────────────────┐   │
                                                            │   ▼
-                                                  030_phase_targets
+                                                  130_phase_targets
                                                            │
-                                                    040_selection
+                                                    140_selection
                                                            │
                                               microtrips/*.parquet
                                                            │
-                                                    050_assembly
+                                                    150_assembly
                                                            │
                                                    final_cycle.csv
 ```
 
-Each step is independently re-runnable. Steps 030 and 020 can run in parallel after 010.
+Each step is independently re-runnable. Steps 130 and 120 can run in parallel after 110.
