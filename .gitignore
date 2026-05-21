@@ -37,6 +37,9 @@ dist/
 *.egg-info/
 *.egg
 
+# Sphinx build output
+docs/_build/
+
 # ===== Project-specific ignores =====
 # Ignore all data files
 _data/*.zip
