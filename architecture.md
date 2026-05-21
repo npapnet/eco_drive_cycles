@@ -116,7 +116,7 @@ Private `_trip_ref: weakref.ref` bound via `bind(trip)`.
 - Microtrips are **intermediate disposable artifacts**.
 - When saved to disk (e.g. by workflow scripts), they contain only the **processed columns** (the subset derived from `CURATED_COLS`). Original raw data is not preserved in microtrips to save space.
 - Data access in-memory raises `RuntimeError` if Trip is GC'd (D1: no parquet reload fallback).
-- See `docs/designs/archive/microtrip_design_spec.md`.
+- See `notes/designs/archive/microtrip_design_spec.md`.
 
 ---
 
@@ -137,7 +137,7 @@ Constructors:
 - `from_duckdb_catalog(db_path, config)` — loads from DuckDB catalog (legacy)
 
 Methods: `similarity_scores(measure=pct_deviation)`, `find_representative(measure=pct_deviation)`.
-Both accept any `SimilarityMeasure` (see `similarity/` subpackage). See `docs/similarity/methodology.md`.
+Both accept any `SimilarityMeasure` (see `similarity/` subpackage). See `notes/similarity/methodology.md`.
 
 ---
 
@@ -247,7 +247,7 @@ Raw .xlsx (OBD-II)
 
 | File | Purpose |
 |---|---|
-| `docs/designs/archive/refactor_v0.3.md` | v0.3 design doc (shipped). Authoritative reference for metadata schema, ingest/extract pipeline, OBDFile strictness. |
-| `docs/designs/archive/microtrip_design_spec.md` | Microtrip segmentation spec (shipped 2026-04-23). Two-stage design, Microtrip model, SegmentationConfig. |
+| `notes/designs/archive/refactor_v0.3.md` | v0.3 design doc (shipped). Authoritative reference for metadata schema, ingest/extract pipeline, OBDFile strictness. |
+| `notes/designs/archive/microtrip_design_spec.md` | Microtrip segmentation spec (shipped 2026-04-23). Two-stage design, Microtrip model, SegmentationConfig. |
 | `TODOS.md` | Prioritised backlog |
 | `DATA.md` | Data collection notes and Google Drive link |

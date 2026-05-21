@@ -95,7 +95,7 @@ Raw OBD xlsx/csv
 | `dcc gui` | Launch the tkinter GUI |
 
 See `CLAUDE.md` for developer guidance, `TODOS.md` for the backlog, and
-`docs/designs/obd-file-processing-config.md` for the full pipeline design.
+`notes/designs/obd-file-processing-config.md` for the full pipeline design.
 
 ---
 

@@ -77,8 +77,8 @@
 * **The 'Why' (Value):** The first batch (Galatas, Stefanakis, Kalyvas, Ladikas) was collected without standardized specs. Without an audit, the same quality issues (missing columns, format mismatches, separator/decimal inconsistencies) will recur with each new batch.
 * **The 'What' (Execution):**
   - Run `scripts/migrate_to_archive.py` against `raw_data/`. Document which files fail, which columns are missing/malformed, and the spread per driver.
-  - Write `docs/data_acquisition_spec.md`: required OBD-II channels, expected dtypes, known Torque export quirks. Reference `CURATED_COLS` as the minimum viable set.
-* **Targets:** `scripts/migrate_to_archive.py`, `raw_data/`, new `docs/data_acquisition_spec.md`.
+  - Write `notes/data_acquisition_spec.md`: required OBD-II channels, expected dtypes, known Torque export quirks. Reference `CURATED_COLS` as the minimum viable set.
+* **Targets:** `scripts/migrate_to_archive.py`, `raw_data/`, new `notes/data_acquisition_spec.md`.
 
 ---
 
