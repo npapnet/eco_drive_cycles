@@ -10,6 +10,8 @@ except PackageNotFoundError:
 
 
 # Import the main classes from the submodules
+from .clustering import Clusterer, KMeansClusterer
+from .microtrip_collection import MicrotripCollection
 from .obd_file import OBDFile
 from .schema import (
     ClusterSynthesisConfig,
@@ -27,6 +29,9 @@ __all__ = [
     "TripCollection",
     "OBDFile",
     "MicrotripSegmenter",
+    "MicrotripCollection",
+    "Clusterer",
+    "KMeansClusterer",
     "MarkovConfig",
     "SynthesisSelectionConfig",
     "WLTPSynthesisConfig",

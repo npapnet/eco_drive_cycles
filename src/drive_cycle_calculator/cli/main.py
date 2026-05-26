@@ -4,6 +4,7 @@ from .config_init import app as config_init_app
 from .extract import app as extract_app
 from .ingest import app as ingest_app
 from .analyze import app as analyze_app
+from .segment import app as segment_app
 from .gui import app as gui_app
 
 app = typer.Typer(
@@ -14,6 +15,7 @@ app = typer.Typer(
 app.add_typer(config_init_app, name="config-init")
 app.add_typer(ingest_app, name="ingest")
 app.add_typer(extract_app, name="extract")
+app.add_typer(segment_app, name="segment")
 app.add_typer(analyze_app, name="analyze")
 app.add_typer(gui_app, name="gui")
 
