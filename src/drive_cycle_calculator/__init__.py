@@ -21,6 +21,7 @@ from .schema import (
     WLTPSynthesisConfig,
 )
 from .segmentation import MicrotripSegmenter
+from .synthesis import synthesize
 from .trip import Trip
 from .trip_collection import TripCollection
 
@@ -37,4 +38,5 @@ __all__ = [
     "WLTPSynthesisConfig",
     "ClusterSynthesisConfig",
     "SynthesisConfig",
+    "synthesize",
 ]

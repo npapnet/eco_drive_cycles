@@ -318,19 +318,36 @@ class MicrotripSegmenter:
                     duration_s = float(len(motion) + len(stop))
                     dt = pd.Series(1.0, index=motion.index)
 
+                speed_col = (
+                    "smooth_speed_kmh" if "smooth_speed_kmh" in motion.columns else "speed_kmh"
+                )
                 speed_kmh = pd.to_numeric(
-                    motion.get("smooth_speed_kmh", pd.Series(dtype=float)), errors="coerce"
+                    motion.get(speed_col, pd.Series(dtype=float)), errors="coerce"
                 ).fillna(0.0)
                 distance_m = float((speed_kmh / 3.6 * dt).sum())
                 mean_speed_kmh = float(speed_kmh.mean()) if not speed_kmh.empty else 0.0
+                max_speed_kmh = float(speed_kmh.max()) if not speed_kmh.empty else 0.0
+                speed_95th_kmh = float(speed_kmh.quantile(0.95)) if not speed_kmh.empty else 0.0
+                stop_duration_s = float(mt.stop_duration_after)
+
+                if "acc_ms2" in motion.columns and distance_m > 0:
+                    acc = pd.to_numeric(motion["acc_ms2"], errors="coerce").fillna(0.0)
+                    acc_pos = acc.clip(lower=0.0)
+                    rpa = float((speed_kmh / 3.6 * acc_pos * dt).sum() / distance_m)
+                else:
+                    rpa = float("nan")
 
                 rows.append({
                     "trip_id": trip_id,
                     "microtrip_idx": idx,
                     "path": str(fpath),
                     "duration_s": duration_s,
+                    "stop_duration_s": stop_duration_s,
                     "distance_m": distance_m,
                     "mean_speed_kmh": mean_speed_kmh,
+                    "max_speed_kmh": max_speed_kmh,
+                    "speed_95th_kmh": speed_95th_kmh,
+                    "rpa": rpa,
                 })
 
         return pd.DataFrame(rows)
