@@ -13,16 +13,19 @@ app = typer.Typer(help="Ingest raw OBD files into v2 archive Parquets (no DuckDB
 
 @app.callback(invoke_without_command=True)
 def ingest(
-    raw_dir: Path = typer.Argument(
+    first_arg: Path = typer.Argument(
         ...,
-        help="Directory containing raw OBD exports (.xlsx or .csv).",
+        help=(
+            "Project directory (single-arg mode: reads raw/, writes trips/) "
+            "or raw OBD directory (two-arg mode)."
+        ),
         exists=True,
         file_okay=False,
         dir_okay=True,
     ),
-    out_dir: Path = typer.Argument(
-        ...,
-        help="Directory to write archive Parquets into (<out_dir>/trips/).",
+    out_dir: Optional[Path] = typer.Argument(
+        None,
+        help="Output directory (two-arg backward-compat mode only).",
         file_okay=False,
     ),
     format: str = typer.Option(
@@ -60,8 +63,27 @@ def ingest(
         help="Disable 1 Hz resampling. Archive will contain raw timestamps.",
     ),
 ) -> None:
-    archive_dir = out_dir / "trips"
-    archive_dir.mkdir(parents=True, exist_ok=True)
+    if out_dir is None:
+        # Single-arg project-dir mode
+        from drive_cycle_calculator.cli._layout import _project_layout
+
+        project_dir = first_arg
+        raw_subdir = project_dir / "raw"
+        if not raw_subdir.is_dir():
+            typer.secho(
+                f"No raw/ subfolder found under {project_dir}. "
+                "Create raw/ and place your OBD export files there first.",
+                fg=typer.colors.RED,
+            )
+            raise typer.Exit(code=1)
+        layout = _project_layout(project_dir)
+        raw_dir = layout.raw
+        archive_dir = layout.trips
+    else:
+        # Two-arg backward-compat mode
+        raw_dir = first_arg
+        archive_dir = out_dir / "trips"
+        archive_dir.mkdir(parents=True, exist_ok=True)
 
     # ── Discover metadata-<folder>.yaml ──────────────────────────────────────
     yaml_files = sorted(raw_dir.glob("metadata-*.yaml"))
@@ -71,10 +93,8 @@ def ingest(
 
     if len(yaml_files) == 1:
         raw_yaml = yaml.safe_load(yaml_files[0].read_text(encoding="utf-8")) or {}
-        # Pull ingest-only settings before passing to UserMetadata
         yaml_sep = raw_yaml.pop("sep", None)
         yaml_decimal = raw_yaml.pop("decimal", None)
-        # Drop null-valued keys so Pydantic defaults (None) take effect
         user_fields = {k: v for k, v in raw_yaml.items() if v is not None}
         try:
             user_metadata = UserMetadata.model_validate(user_fields)
@@ -165,4 +185,3 @@ def ingest(
         typer.secho("  Tip: re-run with --force to overwrite existing files.", fg=typer.colors.YELLOW)
     if ok:
         typer.secho("Done. Run 'dcc extract' to compute metrics.", fg=typer.colors.GREEN)
-

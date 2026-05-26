@@ -1,4 +1,4 @@
-"""CLI tests for dcc extract (N18–N20)."""
+"""CLI tests for dcc extract."""
 
 from __future__ import annotations
 
@@ -17,51 +17,50 @@ _EXPECTED_COLS = {
     "user", "fuel_type", "vehicle_category", "vehicle_make", "vehicle_model",
     "engine_size_cc", "year",
     "gps_lat_mean", "gps_lon_mean",
-    "duration_s", "avg_velocity_kmh", "max_velocity_kmh",
+    "duration_s", "avg_velocity_kmh", "mean_speed_ns_kmh", "max_velocity_kmh",
     "avg_acceleration_ms2", "avg_deceleration_ms2", "idle_time_pct", "stop_count",
     "config_hash", "config_snapshot",
 }
 
 
-class TestCliExtract:
-    def test_produces_metrics_duckdb(self, tmp_path, archive_parquet):
-        """extract creates metrics.duckdb with a trip_metrics table."""
-        import duckdb
+def _find_metrics_csv(data_dir):
+    """Return the metrics.csv written by extract, or None."""
+    csvs = sorted((data_dir / "analyses").glob("*/metrics.csv"))
+    return csvs[-1] if csvs else None
 
+
+class TestCliExtract:
+    def test_produces_metrics_csv(self, tmp_path, archive_parquet):
+        """extract creates a metrics.csv under analyses/<timestamp>/."""
         archive_parquet(tmp_path / "trips" / "trip_a.parquet")
         result = runner.invoke(app, ["extract", str(tmp_path)])
         assert result.exit_code == 0
-        db_path = tmp_path / "metrics.duckdb"
-        assert db_path.exists()
-        with duckdb.connect(str(db_path), read_only=True) as conn:
-            count = conn.execute("SELECT COUNT(*) FROM trip_metrics").fetchone()[0]
-        assert count == 1
+        csv_path = _find_metrics_csv(tmp_path)
+        assert csv_path is not None and csv_path.exists()
+        df = pd.read_csv(csv_path)
+        assert len(df) == 1
+
+    def test_no_duckdb_created(self, tmp_path, archive_parquet):
+        """extract does not create any .duckdb file."""
+        archive_parquet(tmp_path / "trips" / "trip_a.parquet")
+        runner.invoke(app, ["extract", str(tmp_path)])
+        assert not any(tmp_path.rglob("*.duckdb"))
 
     def test_output_schema_completeness(self, tmp_path, archive_parquet):
-        """trip_metrics table has all expected columns with non-null trip_id."""
-        import duckdb
-
+        """metrics.csv has all expected columns including mean_speed_ns_kmh."""
         archive_parquet(tmp_path / "trips" / "trip_a.parquet", speed_kmh=36.0)
         runner.invoke(app, ["extract", str(tmp_path)])
-        db_path = tmp_path / "metrics.duckdb"
-        with duckdb.connect(str(db_path), read_only=True) as conn:
-            cols = {
-                r[0]
-                for r in conn.execute(
-                    "SELECT column_name FROM information_schema.columns "
-                    "WHERE table_name='trip_metrics'"
-                ).fetchall()
-            }
-            row = conn.execute("SELECT trip_id, config_hash, config_snapshot FROM trip_metrics").fetchone()
-        assert _EXPECTED_COLS.issubset(cols)
-        assert row is not None
-        trip_id, config_hash, config_snapshot = row
-        assert trip_id is not None
-        assert len(config_hash) == 8
-        assert '"window"' in config_snapshot
+        csv_path = _find_metrics_csv(tmp_path)
+        df = pd.read_csv(csv_path)
+        assert _EXPECTED_COLS.issubset(set(df.columns))
+        row = df.iloc[0]
+        assert row["trip_id"] is not None
+        assert len(row["config_hash"]) == 8
+        assert '"window"' in row["config_snapshot"]
+        assert pd.notna(row["mean_speed_ns_kmh"])
 
     def test_skips_legacy_parquet_without_dcc_metadata(self, tmp_path):
-        """Parquet lacking dcc_metadata is skipped; exit code 0; no output file."""
+        """Parquet lacking dcc_metadata is skipped; exit code 0; no metrics.csv written."""
         trips = tmp_path / "trips"
         trips.mkdir()
         df = pd.DataFrame({"Speed (OBD)(km/h)": [30.0]})
@@ -70,4 +69,4 @@ class TestCliExtract:
         result = runner.invoke(app, ["extract", str(tmp_path)])
         assert result.exit_code == 0
         assert "SKIP" in result.output
-        assert not (tmp_path / "metrics.duckdb").exists()
+        assert _find_metrics_csv(tmp_path) is None
