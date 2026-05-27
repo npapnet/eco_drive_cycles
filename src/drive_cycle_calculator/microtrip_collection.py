@@ -188,8 +188,9 @@ class MicrotripCollection:
             or ``wltp_phase``).
         metrics : list[str], optional
             Numeric columns to include in the similarity computation.
-            Defaults to ``["mean_speed_kmh", "distance_m", "duration_s"]``
-            (intersection with available columns).
+            Defaults to ``["mean_speed_kmh", "rpa", "speed_95th_kmh",
+            "idle_fraction"]`` — the subset present in the summary is used
+            automatically.
         measure : SimilarityMeasure
             Similarity function.  Defaults to ``pct_deviation``.
 
@@ -201,7 +202,7 @@ class MicrotripCollection:
             within its group).
         """
         if metrics is None:
-            defaults = ["mean_speed_kmh", "distance_m", "duration_s"]
+            defaults = ["mean_speed_kmh", "rpa", "speed_95th_kmh", "idle_fraction"]
             metrics = [c for c in defaults if c in self._summary.columns]
 
         df = self._summary.copy()

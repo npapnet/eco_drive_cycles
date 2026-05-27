@@ -186,6 +186,39 @@ class TestRank:
         with pytest.raises(ValueError, match="not found"):
             persisted_collection.rank(group_col="nonexistent_col")
 
+    def test_two_groups_closest_to_mean_gets_rank1(self, tmp_path):
+        """In each of two groups, rank 1 goes to the microtrip closest to the group mean."""
+        speeds = [0.0] * 5 + [30.0] * 60 + [0.0] * 5
+        trips = [_make_trip(f"t{i}", speeds) for i in range(6)]
+        tc = TripCollection(trips)
+        segmenter = MicrotripSegmenter(SegmentationConfig())
+        result = segmenter.segment_collection(tc)
+        mt_dir = tmp_path / "mts6"
+        segmenter.export_collection(result, mt_dir)
+        mc = MicrotripCollection.from_parquets(mt_dir)
+        assert len(mc) == 6
+
+        # Override mean_speed_kmh to create a controlled two-group layout:
+        # Group A: [18, 20, 25] → fleet mean ≈ 21 → 20 is closest
+        # Group B: [50, 55, 58] → fleet mean ≈ 54.3 → 55 is closest
+        mc._summary["mean_speed_kmh"] = [18.0, 20.0, 25.0, 50.0, 55.0, 58.0]
+        mc._summary["group"] = ["A", "A", "A", "B", "B", "B"]
+
+        ranked = mc.rank(group_col="group", metrics=["mean_speed_kmh"])
+
+        for grp_label, expected_speed in [("A", 20.0), ("B", 55.0)]:
+            best = ranked[(ranked["group"] == grp_label) & (ranked["rank"] == 1)]
+            assert best["mean_speed_kmh"].iloc[0] == pytest.approx(expected_speed)
+
+    def test_rank_stable_with_tied_scores(self, persisted_collection):
+        """Tied scores produce distinct ranks 1..N (no duplicates, no gaps)."""
+        mc = persisted_collection
+        # Both trips use identical speed profiles → identical metrics → identical scores
+        mc._summary["group"] = "X"
+        ranked = mc.rank(group_col="group")
+        n = len(ranked)
+        assert sorted(ranked["rank"].tolist()) == list(range(1, n + 1))
+
 
 # ── KMeansClusterer ───────────────────────────────────────────────────────────
 
