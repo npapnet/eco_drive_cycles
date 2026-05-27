@@ -7,8 +7,9 @@ Parquet per trip into OUTPUT_DIR/trips/.  Skips files that already
 exist (delete the destination or set force_reingest = true in config.json
 to overwrite).
 
-Equivalent CLI command:
-    uv run dcc ingest <DATA_DIR> <OUTPUT_DIR>
+Equivalent CLI commands:
+    uv run dcc ingest <project_dir>           # single-arg form (reads raw/, writes trips/)
+    uv run dcc ingest <DATA_DIR> <OUTPUT_DIR> # two-arg form (backward-compatible)
 
 Configuration is read from config.json in the same directory as this script.
 """
