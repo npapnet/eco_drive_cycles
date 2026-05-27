@@ -224,6 +224,9 @@ def _promote_flat_synthesis(data: Any) -> Any:
     return data
 
 
+_WLTP_VALID_PHASES: frozenset[str] = frozenset({"Low", "Med", "High", "xHigh"})
+
+
 class WLTPSynthesisConfig(BaseModel):
     """Full configuration for WLTP-style phase-based cycle synthesis.
 
@@ -247,6 +250,17 @@ class WLTPSynthesisConfig(BaseModel):
     @classmethod
     def _from_flat(cls, data: Any) -> Any:
         return _promote_flat_synthesis(data)
+
+    @field_validator("phase_min_distance_m")
+    @classmethod
+    def _valid_phase_names(cls, v: dict[str, float]) -> dict[str, float]:
+        unknown = set(v.keys()) - _WLTP_VALID_PHASES
+        if unknown:
+            raise ValueError(
+                f"Unknown WLTP phase name(s) in phase_min_distance_m: "
+                f"{sorted(unknown)}. Valid phases: {sorted(_WLTP_VALID_PHASES)}"
+            )
+        return v
 
 
 class ClusterSynthesisConfig(BaseModel):
