@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
   `EXISTS` warning and a collision count in the summary. Pass `--force` to overwrite.
   The `--format` / `-f` short alias is unchanged; `--force` has no short alias.
 - `OBDFile.to_parquet()` now enforces uniform 1 Hz time series by default. Uses mean-aggregation for downsampling (e.g. 5 Hz inputs) and linear interpolation / forward-filling for upsampling (jitter/gaps).
+- Reorganized `docs/` folder structure to follow standard Sphinx separate source/build conventions: moved source files to `docs/source/`, updated `make.bat`, added a standard `Makefile`, and configured output to compile to `docs/build/`.
 - Reorganized `examples/` workflow directory structure:
   - Consolidated all workflow scripts and downstream synthesis pipelines under `examples/workflow/`.
   - Renamed core pipeline scripts from `0d_*.py` format to `0d0_*.py` (e.g. `010_ingest.py` through `040_microtrip_clustering.py`).
