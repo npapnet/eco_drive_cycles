@@ -21,3 +21,11 @@ similarity measures) are accessible from their respective submodules.
    processing_config
    schema
    similarity
+   clustering
+   synthesis_markov
+   synthesis_targets
+   synthesis_selection
+   synthesis_assembly
+   synthesis_wltp
+   synthesis_cluster
+

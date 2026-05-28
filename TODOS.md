@@ -1,72 +1,78 @@
 # Immediate steps
 
+## P2 — GUI Parquet path fix
+- **Domain:** GUI / UX
+- **Effort:** S | **Impact:** H | **ROI:** High
+- **Status:** 🏗️ Todo
+- **Dependencies:** None
+
+* **The 'Why' (Value):** The GUI's Parquet path loading is currently broken (`FileNotFoundError`) due to incorrect path resolution of `parquet_name` under the new layout convention. We need to fix it so that trips can be loaded and viewed in the interactive GUI.
+* **The 'What' (Execution):** Update GUI file loader in `src/drive_cycle_calculator/cli/gui.py` to resolve Parquet paths using the `ProjectLayout` or `parquet_name` scheme correctly.
+* **Targets:** `src/drive_cycle_calculator/cli/gui.py`.
+
+---
+
+## P2 — DBSCANClusterer + additional clustering algorithms
+- **Domain:** Analysis / Package API
+- **Effort:** M | **Impact:** H | **ROI:** High
+- **Status:** 🏗️ Todo
+- **Dependencies:** None
+
+* **The 'Why' (Value):** Users want alternative clustering methods like DBSCAN that don't require pre-specifying the number of clusters (which K-Means does).
+* **The 'What' (Execution):** Implement `DBSCANClusterer` (under `clustering.py` satisfying `Clusterer` Protocol) and support additional clustering options like `AgglomerativeClusterer`.
+* **Targets:** `src/drive_cycle_calculator/clustering.py`.
+
 ---
 
 # ✅ Done in this sprint
 
+## P1 — Candidate Cycle Assembly
+- **Domain:** Analysis / Cycle Synthesis
+- **Status:** ✅ Done
+- **Dependencies:** Representative microtrip selection ✓ prototyped in workflow (`060`/`062`)
+
+* **The 'Why' (Value):** This is the project's primary research deliverable — a synthetic representative driving cycle assembled from microtrip building blocks that statistically matches fleet-level metrics.
+* **The 'What' (Execution):** Defined a modular transition-matrix and Frobenius distance-driven cycle synthesis algorithm. Integrated WLTP phase-based and cluster-based paths into a unified `synthesis/` subpackage.
+* **Targets:** `src/drive_cycle_calculator/synthesis/`.
+
+## P1 — Modular In-Place Workflow (Single-Argument Ingest)
+**Domain:** CLI / UX
+**Status:** ✅ Done
+**Dependencies:** None
+
+* **The 'Why' (Value):** The two-argument `dcc ingest <raw_dir> <out_dir>` is a legacy of a centralized repository model. Researchers expect to keep processed artifacts alongside their raw data.
+* **The 'What' (Execution):** If `dcc ingest` (or other CLI subcommands) receives a single directory argument, it acts on it as a project directory with standard subdirectories (`raw/`, `trips/`, `microtrips/`, `reports/`, `analyses/`).
+* **Targets:** `src/drive_cycle_calculator/cli/`.
+
+## P2 — Representative Microtrip Selection (Promote to Package)
+- **Domain:** Analysis / Package API
+- **Status:** ✅ Done
+- **Dependencies:** v0.4 refactor ✓ shipped. Workflow prototype ✓ `060`/`062` scripts.
+
+* **The 'Why' (Value):** Promoting to the package makes representative microtrip selection testable, importable, and reusable across datasets.
+* **The 'What' (Execution):** Implemented `MicrotripCollection.rank()` supporting pluggable similarity measures (`pct_deviation`, `z_score_distance`, `cosine_similarity`).
+* **Targets:** `src/drive_cycle_calculator/microtrip_collection.py`.
+
+## P3 — Microtrip Export to Parquet (Promote to Package)
+- **Domain:** Package API / Persistence
+- **Status:** ✅ Done
+- **Dependencies:** v0.4 refactor ✓ shipped. Workflow prototype ✓ `03_build_microtrips.py`.
+
+* **The 'Why' (Value):** Writes per-microtrip Parquets (processed columns only) and `summary.csv`.
+* **The 'What' (Execution):** Added `Microtrip.to_parquet()`, `from_parquet()`, and `export_collection()` to encapsulate persistence.
+* **Targets:** `src/drive_cycle_calculator/microtrip.py`, `segmentation.py`.
+
 ## v-a Density Cloud and Canonical Profile Visualisation
 - **Domain:** Visualisation / Cluster Validation
-- **Effort:** M | **Impact:** H | **ROI:** High
 - **Status:** ✅ Done
 - **Dependencies:** None
 
-* **The 'Why' (Value):** Joint velocity-acceleration (v-a) probability density matrices are the industry standard for drive cycle fingerprinting and representativeness validation (André 2004, Ericsson 2001). Unlike v-t profiles which show individual events, v-a clouds capture aggregate statistical signatures. Standard scatter plots become unreadable with large datasets.
-* **The 'What' (Execution):**
-  - v-a density hexbin (`050_microtrip_visualisation.py`) — per-cluster hexbin of speed vs. acceleration, with scalability notes for datashader/KDE2D at fleet scale.
-  - v-t scatter cloud (`050_microtrip_visualisation.py`) — per-cluster point cloud of (relative time, speed).
-  - v-t comparison overlay (`051_microtrip_vis_comparison_vt.py`) — multi-cluster overlay on a single figure.
-  - Canonical representative profiles (`062_plot_representatives.py`) — faceted top-N speed profiles per cluster per similarity metric.
+* **The 'Why' (Value):** Joint velocity-acceleration (v-a) probability density matrices are the industry standard for drive cycle fingerprinting.
+* **The 'What' (Execution):** Developed custom hexbin and comparison visualizations (`050_*.py`, `051_*.py`, `062_*.py`).
 * **Targets:** `examples/workflow/050_*.py`, `051_*.py`, `062_*.py`.
 
 
 # 📥 Triage & Next Steps
-
-## P1 — Candidate Cycle Assembly
-- **Domain:** Analysis / Cycle Synthesis
-- **Effort:** M | **Impact:** H | **ROI:** High
-- **Status:** 🏗️ Todo
-- **Dependencies:** ~~Representative microtrip selection~~ ✓ prototyped in workflow (`060`/`062`)
-
-* **The 'Why' (Value):** This is the project's primary research deliverable — a synthetic representative driving cycle assembled from microtrip building blocks that statistically matches fleet-level metrics. Without this, the pipeline stops at clustering.
-* **The 'What' (Execution):**
-  - Define a cycle-assembly algorithm: select one representative microtrip per cluster, concatenate into a time-series speed profile, validate aggregate statistics (mean speed, stop %, acc/dec) against fleet averages.
-  - Prototype as a new workflow script (`07x_assemble_cycle.py`) before promoting to package.
-  - Output: time-series DataFrame + summary stats + validation report.
-* **Targets:** New `examples/workflow/07x_*.py`, eventually `src/drive_cycle_calculator/cycle_assembly.py`.
-
----
-
-
-
-## P1 — Modular In-Place Workflow (Single-Argument Ingest)
-**Domain:** CLI / UX
-**Effort:** S | **Impact:** M | **ROI:** High (Low-Hanging Fruit)
-**Status:** 🏗️ Todo
-**Dependencies:** None
-
-* **The 'Why' (Value):** The two-argument `dcc ingest <raw_dir> <out_dir>` is a legacy of a centralized repository model. Researchers expect to keep processed artifacts alongside their raw data.
-* **The 'What' (Execution):**
-  - If `dcc ingest` receives a single directory argument, use it for both input and output (creating `trips/`, `microtrips/`, `reports/` subfolders within it).
-  - Two-argument form remains supported for backward compatibility.
-* **Targets:** `src/drive_cycle_calculator/cli/ingest.py`, `src/drive_cycle_calculator/cli/main.py`.
-
----
-
-## P2 — Representative Microtrip Selection (Promote to Package)
-- **Domain:** Analysis / Package API
-- **Effort:** S | **Impact:** M | **ROI:** High (Low-Hanging Fruit)
-- **Status:** 🏗️ Todo
-- **Dependencies:** ~~v0.4 refactor~~ ✓ shipped. ~~Workflow prototype~~ ✓ `060`/`062` scripts.
-
-* **The 'Why' (Value):** Algorithm is fully proven in workflow staging (`060_select_representatives.py`, `062_plot_representatives.py`). Promoting to the package makes it testable, importable, and reusable across datasets without copy-pasting workflow scripts.
-* **The 'What' (Execution):**
-  - Extract ranking logic from `060_select_representatives.py` into a new module (e.g. `src/drive_cycle_calculator/microtrip_ranking.py`) or as a method on `TripCollection`.
-  - Support the three pluggable similarity measures already implemented: `z_score_distance`, `pct_deviation`, `cosine_similarity`.
-  - Export `ranked_microtrips.csv` with `score_<name>` and `rank_<name>` columns per cluster.
-  - Add unit tests covering per-cluster ranking and edge cases.
-* **Targets:** New `src/drive_cycle_calculator/microtrip_ranking.py` or `trip_collection.py`, `tests/`.
-
----
 
 ## P2 — First-Batch Data Quality Audit
 - **Domain:** Data Engineering / Quality
@@ -95,20 +101,6 @@
 
 ---
 
-## P3 — Microtrip Export to Parquet (Promote to Package)
-- **Domain:** Package API / Persistence
-- **Effort:** S | **Impact:** L | **ROI:** Medium
-- **Status:** 🏗️ Todo
-- **Dependencies:** ~~v0.4 refactor~~ ✓ shipped. ~~Workflow prototype~~ ✓ `03_build_microtrips.py`.
-
-* **The 'Why' (Value):** Logic is fully proven in workflow. `03_build_microtrips.py` writes per-microtrip Parquets (processed columns + `stop_phase` flag) and `summary.csv`. Microtrip Parquets contain only the processed (curated) columns — they are intermediate disposable artifacts. Promoting to the package makes it a first-class API.
-* **The 'What' (Execution):**
-  - Extract export logic into a `Microtrip.to_parquet()` method or a utility function in `segmentation.py`.
-  - Ensure output schema matches workflow convention: processed columns only + `stop_phase` boolean.
-  - Add unit tests.
-* **Targets:** `src/drive_cycle_calculator/microtrip.py` or `segmentation.py`, `tests/`.
-
----
 
 ## P3 — TripCollection Constructor-Level Filtering
 - **Domain:** Package API / Data Loading
