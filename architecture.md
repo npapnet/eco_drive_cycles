@@ -316,7 +316,8 @@ Raw .xlsx (OBD-II)
 
 | File | Purpose |
 |---|---|
-| `notes/designs/archive/refactor_v0.3.md` | v0.3 design doc (shipped). Authoritative reference for metadata schema, ingest/extract pipeline, OBDFile strictness. |
-| `notes/designs/archive/microtrip_design_spec.md` | Microtrip segmentation spec (shipped 2026-04-23). Two-stage design, Microtrip model, SegmentationConfig. |
-| `TODOS.md` | Prioritised backlog |
-| `DATA.md` | Data collection notes and Google Drive link |
+| [refactor_v0.3.md](file:///d:/_sandbox/research/eco_drive_cycles/notes/designs/archive/refactor_v0.3.md) | v0.3 design doc (shipped). Authoritative reference for metadata schema, ingest/extract pipeline, OBDFile strictness. |
+| [microtrip_design_spec.md](file:///d:/_sandbox/research/eco_drive_cycles/notes/designs/archive/microtrip_design_spec.md) | Microtrip segmentation spec (shipped 2026-04-23). Two-stage design, Microtrip model, SegmentationConfig. |
+| [synthesis-algorithm.rst](file:///d:/_sandbox/research/eco_drive_cycles/docs/source/theory/synthesis-algorithm.rst) | Technical reference for the drive cycle synthesis algorithm, explaining state discretization, transition matrices, Frobenius representative distance, stochastic selection, and comparing WLTP vs. generic clustering assignment. |
+| [TODOS.md](file:///d:/_sandbox/research/eco_drive_cycles/TODOS.md) | Prioritised backlog |
+| [DATA.md](file:///d:/_sandbox/research/eco_drive_cycles/DATA.md) | Data collection notes and Google Drive link |

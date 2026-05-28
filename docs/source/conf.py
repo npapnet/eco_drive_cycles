@@ -20,6 +20,7 @@ extensions = [
     "myst_parser",
     "sphinxcontrib.mermaid",
     "sphinx_autodoc_typehints",
+    "sphinx.ext.mathjax",
 ]
 
 templates_path = ["_templates"]
@@ -36,6 +37,8 @@ myst_enable_extensions = [
     "colon_fence",
     "deflist",
     "tasklist",
+    "dollarmath",
+    "amsmath",
 ]
 
 # -- HTML output ---------------------------------------------------------------
