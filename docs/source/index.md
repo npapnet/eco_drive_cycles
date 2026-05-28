@@ -42,6 +42,8 @@ quickstart/index
 :maxdepth: 2
 :caption: Theory
 
+theory/ingestion-preprocessing
+theory/microtrip-spec
 theory/synthesis-algorithm
 ```
 
