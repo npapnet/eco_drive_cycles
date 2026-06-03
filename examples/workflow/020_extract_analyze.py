@@ -3,8 +3,9 @@
 Step 2 — Extract trip metrics and run similarity analysis.
 
 Reads archive Parquets from OUTPUT_DIR/trips/, computes per-trip metrics,
-writes them to OUTPUT_DIR/metrics.duckdb, then runs similarity scoring and
-produces a Markdown report + CSV in OUTPUT_DIR/analyses/<run>/.
+writes them to OUTPUT_DIR/metrics.duckdb (for the workflow; the CLI uses CSV
+instead), then runs similarity scoring and produces a Markdown report + CSV
+in OUTPUT_DIR/analyses/dcca-<timestamp>/.
 
 Equivalent CLI commands:
     uv run dcc extract <OUTPUT_DIR>

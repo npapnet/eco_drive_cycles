@@ -180,6 +180,10 @@ class TripCollection:
     ) -> "TripCollection":
         """Load trips eagerly from a DuckDB catalog.
 
+        .. note::
+           This constructor is retained for future cloud/database persistence use,
+           but is not currently invoked by any CLI subcommand as DuckDB output was dropped from the CLI.
+
         Creates OBDFile stubs from each row's parquet_path, then calls
         to_trip(config) for each. All Parquets are read at load time.
 

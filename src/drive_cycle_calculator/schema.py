@@ -7,9 +7,9 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 # ── OBD column constants ──────────────────────────────────────────────────────
@@ -157,6 +157,134 @@ class SegmentationConfig(BaseModel):
         if v < 5.0:
             raise ValueError("microtrip_min_duration_s cannot be below the 5 s floor")
         return v
+
+
+# ── YAML template generator ───────────────────────────────────────────────────
+
+
+# ── Synthesis config models ───────────────────────────────────────────────────
+
+# Keys that belong in the MarkovConfig sub-model (used by the flat-format adapter).
+_MARKOV_KEYS: frozenset[str] = frozenset(
+    {"speed_bin_width_kmh", "acc_bin_width_ms2", "acc_range_ms2", "markov_lambda"}
+)
+
+# Keys that belong in the SynthesisSelectionConfig sub-model.
+_SELECTION_KEYS: frozenset[str] = frozenset(
+    {"n_trials", "f_threshold", "max_reuse_fraction", "random_seed", "metric_weights"}
+)
+
+
+class MarkovConfig(BaseModel):
+    """Discretisation parameters for Markov-chain state-space construction."""
+
+    speed_bin_width_kmh: float = 10.0
+    acc_bin_width_ms2: float = 0.2
+    acc_range_ms2: float = 1.5
+    markov_lambda: float = 1.0
+
+    model_config = {"extra": "forbid"}
+
+
+class SynthesisSelectionConfig(BaseModel):
+    """Stochastic microtrip selection parameters."""
+
+    n_trials: int = 1000
+    f_threshold: float = 0.01
+    max_reuse_fraction: float = 0.30
+    random_seed: int = 42
+    metric_weights: dict[str, float] = {
+        "mean_speed_kmh": 1.0,
+        "rpa": 2.0,
+        "idle_fraction": 0.5,
+        "speed_95th_kmh": 0.5,
+    }
+
+    model_config = {"extra": "forbid"}
+
+
+def _promote_flat_synthesis(data: Any) -> Any:
+    """Convert a flat legacy JSON dict to the nested MarkovConfig/SynthesisSelectionConfig form.
+
+    Pops the ``_comment`` key silently. Leaves already-nested dicts unchanged.
+    Called from ``model_validator(mode='before')`` on both synthesis config classes.
+    """
+    if not isinstance(data, dict):
+        return data
+    data = dict(data)
+    data.pop("_comment", None)
+    if "markov" not in data:
+        markov = {k: data.pop(k) for k in _MARKOV_KEYS if k in data}
+        if markov:
+            data["markov"] = markov
+    if "selection" not in data:
+        selection = {k: data.pop(k) for k in _SELECTION_KEYS if k in data}
+        if selection:
+            data["selection"] = selection
+    return data
+
+
+_WLTP_VALID_PHASES: frozenset[str] = frozenset({"Low", "Med", "High", "xHigh"})
+
+
+class WLTPSynthesisConfig(BaseModel):
+    """Full configuration for WLTP-style phase-based cycle synthesis.
+
+    Accepts both the nested form (produced by ``model_dump_json``) and the
+    legacy flat form used by ``examples/workflow/config_wltp.json``.
+    """
+
+    markov: MarkovConfig = MarkovConfig()
+    selection: SynthesisSelectionConfig = SynthesisSelectionConfig()
+    inter_phase_idle_s: int = 20
+    phase_min_distance_m: dict[str, float] = {
+        "Low": 800.0,
+        "Med": 600.0,
+        "High": 600.0,
+        "xHigh": 1000.0,
+    }
+
+    model_config = {"extra": "forbid"}
+
+    @model_validator(mode="before")
+    @classmethod
+    def _from_flat(cls, data: Any) -> Any:
+        return _promote_flat_synthesis(data)
+
+    @field_validator("phase_min_distance_m")
+    @classmethod
+    def _valid_phase_names(cls, v: dict[str, float]) -> dict[str, float]:
+        unknown = set(v.keys()) - _WLTP_VALID_PHASES
+        if unknown:
+            raise ValueError(
+                f"Unknown WLTP phase name(s) in phase_min_distance_m: "
+                f"{sorted(unknown)}. Valid phases: {sorted(_WLTP_VALID_PHASES)}"
+            )
+        return v
+
+
+class ClusterSynthesisConfig(BaseModel):
+    """Full configuration for cluster-based cycle synthesis.
+
+    Accepts both the nested form (produced by ``model_dump_json``) and the
+    legacy flat form used by ``examples/workflow/config_syn_cluster.json``.
+    """
+
+    markov: MarkovConfig = MarkovConfig()
+    selection: SynthesisSelectionConfig = SynthesisSelectionConfig()
+    inter_cluster_idle_s: int = 20
+    cluster_min_distance_m: float = 600.0
+
+    model_config = {"extra": "forbid"}
+
+    @model_validator(mode="before")
+    @classmethod
+    def _from_flat(cls, data: Any) -> Any:
+        return _promote_flat_synthesis(data)
+
+
+# Type alias — not a base class. Use isinstance(cfg, WLTPSynthesisConfig) to branch.
+SynthesisConfig = WLTPSynthesisConfig | ClusterSynthesisConfig
 
 
 # ── YAML template generator ───────────────────────────────────────────────────

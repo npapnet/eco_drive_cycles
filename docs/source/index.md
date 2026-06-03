@@ -40,6 +40,15 @@ quickstart/index
 
 ```{toctree}
 :maxdepth: 2
+:caption: Theory
+
+theory/ingestion-preprocessing
+theory/microtrip-spec
+theory/synthesis-algorithm
+```
+
+```{toctree}
+:maxdepth: 2
 :caption: API Reference
 
 api/index

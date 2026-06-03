@@ -1,8 +1,8 @@
 @ECHO OFF
 
 set SPHINXBUILD=uv run sphinx-build
-set SOURCEDIR=.
-set BUILDDIR=_build
+set SOURCEDIR=source
+set BUILDDIR=build
 
 if "%1" == "" goto help
 

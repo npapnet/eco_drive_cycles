@@ -64,6 +64,17 @@ A subcommand added during implementation to decouple archiving from metric compu
 * **Output:** Terminal report of similarity scores (sorted descending) and representative trip stats (mean speed, max speed, stop %, duration).
 * **[Implemented as]** `dcc analyze <data_dir>`.
 
+#### 3.2.6. Microtrip Segmentation (`segment`) — NEW
+* **Input:** `<project_dir>` containing `trips/` subfolder of archive Parquets.
+* **Execution:**
+    1. Loads archive Parquets from `<project_dir>/trips/` into a `TripCollection`.
+    2. Runs `MicrotripSegmenter` with configuration settings to partition the trips into microtrips (motion phases + trailing stops).
+    3. Exports microtrips to `<project_dir>/microtrips/` as individual Parquets.
+    4. Compiles a summary table and writes it to `<project_dir>/reports/microtrip_summary.csv`.
+* **Output:** Processed microtrip Parquet files and `microtrip_summary.csv`.
+* **[Implemented as]** `dcc segment <project_dir> [--stop-threshold T] [--stop-min-duration S] [--microtrip-min-duration S] [--microtrip-min-distance D]`.
+
+
 ## 4. Pipeline Workflow
 
 ```mermaid
