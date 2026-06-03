@@ -15,7 +15,7 @@ For every completed task identified, apply the following logic strictly:
 
 - Features: Append a high-level summary to changelog.md under the current unreleased version.
 
-- Architecture / State Changes: If the completed task changed how the system operates (e.g., new schemas, routing logic, package dependencies, or Pydantic models), update the root architecture.md file to reflect this new reality. If a specific point-in-time design document exists in docs/designs/, update that as well.
+- Architecture / State Changes: If the completed task changed how the system operates (e.g., new schemas, routing logic, package dependencies, or Pydantic models), update the root architecture.md file to reflect this new reality. If a specific point-in-time design document exists in notes/designs/, update that as well.
 
 Step 3: Archive (Optional)
 If the project maintains a `todos_archive.md` file, cut the identified completed tasks from todos.md and append them to the bottom of the archive file under a heading for today's date. If no such file exists, skip this step.

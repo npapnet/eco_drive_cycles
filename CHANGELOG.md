@@ -4,10 +4,39 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-05-28
+
+### Added
+- Unified **`synthesis` subpackage** (`src/drive_cycle_calculator/synthesis/`) implementing Markov-chain state discretization, transition matrix calculations, kinematic targets computation, stochastic microtrip selection, and cycle assembly.
+- **`dcc segment` CLI subcommand** for partitioning trips into motion microtrips and exporting them to the standard project directory layout.
+- **`MicrotripCollection` class** to manage, persistent-load, and rank microtrips by similarity to group averages via pluggable similarity metrics.
+- Pydantic models for synthesis configurations: `MarkovConfig`, `SynthesisSelectionConfig`, `WLTPSynthesisConfig`, and `ClusterSynthesisConfig`.
+- **`KMeansClusterer` class** under `clustering.py` for clustering microtrip metrics.
+- Integration tests in `tests/test_integration.py` running the entire pipeline end-to-end on real data.
+- `dcc ingest` — new `--max-gap-s` (default 5.0) and `--strict-gaps` flags for gap detection during ingest. Gaps > `max_gap_s` trigger warnings (or abort the file if strict).
+- `OBDFile.to_parquet()` — added 1 Hz resampling during archive creation to enforce a uniform time base. Tracks parameters in a new `IngestConfig` model embedded in the Parquet metadata.
+- `examples/workflow/060_select_representatives.py` — script to rank microtrips within clusters using similarity measures and visualize the top N candidates per cluster.
+
 ### Changed
-- `dcc ingest` — existing archive Parquets are now skipped by default with a yellow
-  `EXISTS` warning and a collision count in the summary. Pass `--force` to overwrite.
-  The `--format` / `-f` short alias is unchanged; `--force` has no short alias.
+- Refactored `dcc ingest` and other CLI subcommands to support the **single-argument project directory layout** (with auto-created `trips/`, `microtrips/`, `reports/`, and `analyses/` subfolders).
+- Dropped DuckDB database output from `dcc extract` and the CLI pipeline entirely; `dcc analyze` now directly parses flat CSV metrics.
+- Migrated all `examples/workflow/` scripts to be thin, 20-line wrappers around package APIs.
+- Updated `architecture.md` and `cli-subcommands.md` to reflect the modular synthesis engine and layout changes.
+- Added `project_dir` fixture in `conftest.py`.
+- `dcc ingest` — existing archive Parquets are now skipped by default with a yellow `EXISTS` warning and a collision count in the summary. Pass `--force` to overwrite. The `--format` / `-f` short alias is unchanged; `--force` has no short alias.
+- `OBDFile.to_parquet()` now enforces uniform 1 Hz time series by default. Uses mean-aggregation for downsampling (e.g. 5 Hz inputs) and linear interpolation / forward-filling for upsampling (jitter/gaps).
+- Reorganized `docs/` folder structure to follow standard Sphinx separate source/build conventions: moved source files to `docs/source/`, updated `make.bat`, added a standard `Makefile`, and configured output to compile to `docs/build/`.
+- Reorganized `examples/` workflow directory structure:
+  - Consolidated all workflow scripts and downstream synthesis pipelines under `examples/workflow/`.
+  - Renamed core pipeline scripts from `0d_*.py` format to `0d0_*.py` (e.g. `010_ingest.py` through `040_microtrip_clustering.py`).
+  - Grouped WLTP-based synthesis scripts into `examples/workflow/synthesis-wltp/` subfolder.
+  - Grouped Cluster-based synthesis scripts into `examples/workflow/synthesis-cluster/` subfolder.
+  - Co-located all configuration files (`config.json`, `config_wltp.json`, `config_syn_cluster.json`) in `examples/workflow/` directory.
+  - Refactored scripts to resolve configs relative to `Path(__file__)` and run seamlessly in the new nested directory structure.
+  - Updated console output messages across all workflow scripts to use standard ASCII symbols (`->`, `...`) to prevent `UnicodeEncodeError` in Windows consoles.
+
+### Removed
+- Unused/deprecated parameters in `dcc ingest` and database integration artifacts.
 
 ## [0.4.0] - 2026-05-03
 

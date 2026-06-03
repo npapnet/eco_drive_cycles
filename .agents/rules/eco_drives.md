@@ -10,8 +10,8 @@ trigger: always_on
 - **`students/DriveGUI/`** — ⚠️ FROZEN historical reference. Do not add features, package imports, or modify functionality. Must run standalone forever.
 - **`examples/`** — thin wrappers and scratchpads over the package. No core calculation logic here.
 - **`data/`**, **`_data/`**, **`raw_data/`** — data folders (Parquet, DuckDB, CSV, XLSX). Do not read or process unless explicitly directed.
-- **`brainstorming/`** — sandbox for ideas not yet promoted to `docs/designs/`. Do not use as reference unless explicitly directed.
-- **`docs/designs/`** — point-in-time design documents. May be stale after each iteration; `architecture.md` is the authoritative current state.
+- **`brainstorming/`** — sandbox for ideas not yet promoted to `notes/designs/`. Do not use as reference unless explicitly directed.
+- **`notes/designs/`** — point-in-time design documents. May be stale after each iteration; `architecture.md` is the authoritative current state.
 
 ## 2. Tech Stack & Tooling
 
@@ -52,4 +52,4 @@ See `architecture.md` at the repo root for the full current system state.
 **Delete or Distill rule** — when a task is complete:
 1. Delete it from `TODOS.md`.
 2. If it was a new feature, append a brief summary to `CHANGELOG.md`.
-3. If it changed system architecture, update `architecture.md`. Update `docs/designs/` only if a specific point-in-time design doc exists for that area.
+3. If it changed system architecture, update `architecture.md`. Update `notes/designs/` only if a specific point-in-time design doc exists for that area.

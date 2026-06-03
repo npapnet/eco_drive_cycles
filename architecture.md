@@ -18,10 +18,10 @@ exported as CSV/XLSX. Archived v2 Parquets are in `data/trips/`.
 Raw .xlsx / .csv (OBD-II)
   → dcc config-init <folder>              # generate metadata-<folder>.yaml template
   [user fills in metadata-<folder>.yaml]
-  → dcc ingest <raw_dir> <out_dir>        # raw file → v2 archive Parquet with embedded metadata
-                                          # NO DuckDB created here
+  → dcc ingest <raw_dir> <out_dir>        # raw file → uniform 1 Hz resampled archive Parquet
+                                          # checks gaps, embeds metadata, NO DuckDB created
 
-Archive Parquet (self-contained: raw data + ParquetMetadata)
+Archive Parquet (uniform 1 Hz time series + ParquetMetadata)
   → dcc extract <data_dir>               # read parquets → apply ProcessingConfig → output
   → DuckDB / CSV / XLSX (trip_metrics)   # metrics + metadata + config snapshot
 
@@ -35,6 +35,23 @@ Trip (in-memory, produced by OBDFile.to_trip() or TripCollection loaders)
 
   # Collection-level entry point:
   → MicrotripSegmenter(config).segment_collection(tc)  # dict[str, list[Microtrip]]
+
+---
+
+## Project Directory Structure
+
+```
+<project_dir>/
+├── raw/                             ← raw OBD exports (xlsx/csv)
+│   └── metadata-<project_dir>.yaml  ← user/vehicle metadata (produced by dcc config-init)
+├── trips/                           ← v2 archive Parquets (produced by dcc ingest)
+├── microtrips/                      ← per-trip microtrip Parquets (produced by dcc segment)
+├── reports/                         ← per-trip QA reports (produced by dcc segment)
+└── analyses/
+    ├── dcca-<ts>/                   ← similarity analysis outputs (produced by dcc extract/analyze)
+    └── synth-<ts>/                  ← synthesized cycle outputs (produced by workflow scripts)
+```
+
 ```
 
 ---
@@ -47,26 +64,42 @@ The active calculation layer. All business logic lives here.
 
 ```
 src/drive_cycle_calculator/
-├── __init__.py              — version string; re-exports OBDFile, Trip, TripCollection
+├── __init__.py              — version string; re-exports OBDFile, Trip, TripCollection, MicrotripCollection
 ├── schema.py                — OBD_COLUMN_MAP, CURATED_COLS; Pydantic models: FuelType,
 │                              VehicleCategory, UserMetadata, IngestProvenance,
-│                              ComputedTripStats, ParquetMetadata, SegmentationConfig;
-│                              generate_yaml_template()
+│                              ComputedTripStats, ParquetMetadata, SegmentationConfig,
+│                              MarkovConfig, SynthesisSelectionConfig, WLTPSynthesisConfig,
+│                              ClusterSynthesisConfig; generate_yaml_template()
 ├── gps_time_parser.py       — GpsTimeParser
+├── clustering.py            — Clusterer Protocol and KMeansClusterer
 ├── obd_file.py              — OBDFile
 ├── processing_config.py     — ProcessingConfig, DEFAULT_CONFIG
-├── microtrip.py             — Microtrip (Pydantic model, weakref data access)
+├── microtrip.py             — Microtrip (Pydantic model, lazy load / weakref data access)
+├── microtrip_collection.py  — MicrotripCollection (container for microtrips, ranking)
 ├── segmentation.py          — SegmentBoundary, detect_boundaries(), build_microtrips(),
-│                              MicrotripSegmenter
+│                              MicrotripSegmenter, export_collection()
 ├── trip.py                  — Trip
-├── trip_collection.py       — TripCollection, similarity(), _SEVEN_METRIC_KEYS
+├── trip_collection.py       — TripCollection, _SEVEN_METRIC_KEYS
 ├── cli/                     — CLI subpackage (Typer)
 │   ├── main.py              — app entry point; registers all sub-apps
 │   ├── config_init.py       — dcc config-init
 │   ├── ingest.py            — dcc ingest
 │   ├── extract.py           — dcc extract
+│   ├── segment.py           — dcc segment
 │   ├── analyze.py           — dcc analyze
 │   └── gui.py               — dcc gui
+├── synthesis/               — subpackage for drive cycle synthesis
+│   ├── __init__.py          — synthesize() entry point
+│   ├── markov.py            — state discretization and transition matrix calculations
+│   ├── targets.py           — compute_targets()
+│   ├── selection.py         — select_microtrips()
+│   ├── assembly.py          — junction smoothing and cycle assembly
+│   ├── wltp.py              — assign_wltp_phases()
+│   └── cluster.py           — assign_clusters()
+├── similarity/              — pluggable similarity measures subpackage
+│   ├── __init__.py          — re-exports SimilarityMeasure, pct_deviation,
+│   │                          cosine_similarity, z_score_distance
+│   └── measures.py          — SimilarityMeasure Protocol + all implementations
 └── vis/                     — visualisation subpackage (stub, not yet populated)
 ```
 
@@ -102,19 +135,30 @@ Passed to `Trip.segment()` at call time; not stored on the Trip.
 Fields: `trip_file` (Path), `parquet_id` (str), `start_idx`, `end_idx`,
 `stop_start_idx`, `stop_end_idx` (all iloc positions).
 Private `_trip_ref: weakref.ref` bound via `bind(trip)`.
-Properties: `samples` (motion DataFrame slice), `stop_samples` (trailing-stop slice),
-`stop_duration_after` (float seconds).
-Data access raises `RuntimeError` if Trip is GC'd (D1: no parquet reload fallback).
-See `docs/designs/archive/microtrip_design_spec.md`.
+
+**Properties (Data Access)**:
+- `samples` (motion DataFrame slice)
+- `stop_samples` (trailing-stop slice)
+- `stop_duration_after` (float seconds)
+
+**Lifecycle & Persistence**:
+- Microtrips are **intermediate disposable artifacts**.
+- When saved to disk (e.g. by workflow scripts), they contain only the **processed columns** (the subset derived from `CURATED_COLS`). Original raw data is not preserved in microtrips to save space.
+- Data access in-memory raises `RuntimeError` if Trip is GC'd (D1: no parquet reload fallback).
+- See `notes/designs/archive/microtrip_design_spec.md`.
 
 ---
 
 **`Trip(df, name, stop_threshold_kmh, parquet_id="")`** — one processed session.
-`@cached_property` metrics: `mean_speed`, `mean_acceleration`, `mean_deceleration`,
-`stop_pct`, `stop_count`, `duration`, `mean_speed_no_stops`, `max_speed`.
+`@cached_property` metrics: `duration`, `mean_speed` (mean speed including stops), `mean_speed_no_stops` (mean speed excluding stops), `stop_count`, `stop_pct`, `mean_acceleration`, `mean_deceleration`, `max_speed`.
 Properties: `data` (public DataFrame alias), `file` (Path or None).
 `segment(config: SegmentationConfig) → list[Microtrip]` — convenience wrapper around `MicrotripSegmenter`.
 Stores result on `self._microtrips`; accessible via `trip.microtrips` and `trip.segmentation_config` after the call.
+
+**Note on `mean_ns` (mean non-stop speed)**: This represents the mean speed excluding stops (moving speed). It is stored under the `mean_ns` key inside the metrics dictionary. The property `mean_speed_no_stops` is a direct alias for `mean_ns`.
+The mean speed including stops (`mean_speed`) is derived from the non-stop mean speed and the idle fraction via the relation:
+`mean_speed ≈ mean_ns × (1 - idle_fraction)` (where `idle_fraction` is equivalent to `stop_pct`).
+
 
 ---
 
@@ -125,7 +169,43 @@ Constructors:
 - `from_archive_parquets(path, config)` — loads v2 archive Parquets
 - `from_duckdb_catalog(db_path, config)` — loads from DuckDB catalog (legacy)
 
-Methods: `similarity_scores()`, `find_representative()`.
+Methods: `similarity_scores(measure=pct_deviation)`, `find_representative(measure=pct_deviation)`.
+Both accept any `SimilarityMeasure` (see `similarity/` subpackage). See `notes/similarity/methodology.md`.
+
+---
+
+**`MicrotripCollection`** — container for microtrips.
+Constructors:
+- `from_parquets(directory, summary_csv)` — loads persisted microtrips from disk.
+- `from_trip_collection(tc, segmenter)` — builds microtrips in-memory from a `TripCollection`.
+
+Methods:
+- `rank(group_col, metrics, measure)` — ranks microtrips within each group by similarity to their group mean.
+
+---
+
+**`Clusterer`** — Protocol for microtrip clustering algorithms in `clustering.py`.
+Methods:
+- `fit(summary)` -> returns a `pd.Series` containing group assignments aligned with the summary index.
+
+**`KMeansClusterer`** — K-Means implementation of `Clusterer`.
+
+---
+
+### Synthesis Subpackage (`synthesis/`)
+
+Unifies the drive cycle synthesis logic (WLTP phase-based and cluster-based synthesis) into a single engine.
+
+Modules:
+- `markov` — state discretization and transition matrix calculations.
+- `targets` — duration-weighted mean kinematic target computations.
+- `selection` — stochastic selection of microtrips satisfying distance and probability targets.
+- `assembly` — junction smoothing and drive cycle profile assembly.
+- `wltp` — WLTP-specific phase assignment helpers.
+- `cluster` — cluster-specific assignment helpers.
+
+Top-level entry point:
+- `synthesize(mc, assignments, config)` — runs the full Markov chain synthesis pipeline.
 
 ---
 
@@ -189,9 +269,10 @@ via `ProcessingConfig.apply()`.
 | Subcommand | Status | Description |
 |---|---|---|
 | `dcc config-init <folder>` | New (v0.3) | Write `metadata-<folder>.yaml` template |
-| `dcc ingest <raw_dir> <out_dir> [--force]` | Revised (v0.3) | Raw → archive Parquet. No DuckDB. Skips existing files by default; `--force` overwrites. |
-| `dcc extract <data_dir>` | New (v0.3) | Parquets → DuckDB / CSV / XLSX with metrics |
-| `dcc analyze <data_dir>` | Unchanged | Similarity analysis from DuckDB |
+| `dcc ingest <project_dir>` | Revised (v0.5) | Raw → archive Parquets. Supports single-argument project directory mode (reads from `raw/` and writes to `trips/`). |
+| `dcc segment <project_dir>` | New (v0.5) | Segment archive Parquets into microtrips under `microtrips/` and generate `reports/microtrip_summary.csv`. |
+| `dcc extract <data_dir>` | Revised (v0.5) | Parquets → CSV / XLSX with metrics. DuckDB support dropped from CLI. |
+| `dcc analyze <data_dir>` | Revised (v0.5) | Similarity analysis from metrics CSV. |
 | `dcc gui` | Bug-fix (v0.3) | Uses `parquet_name` scheme |
 
 ---
@@ -235,7 +316,10 @@ Raw .xlsx (OBD-II)
 
 | File | Purpose |
 |---|---|
-| `docs/designs/archive/refactor_v0.3.md` | v0.3 design doc (shipped). Authoritative reference for metadata schema, ingest/extract pipeline, OBDFile strictness. |
-| `docs/designs/archive/microtrip_design_spec.md` | Microtrip segmentation spec (shipped 2026-04-23). Two-stage design, Microtrip model, SegmentationConfig. |
-| `TODOS.md` | Prioritised backlog |
-| `DATA.md` | Data collection notes and Google Drive link |
+| [refactor_v0.3.md](file:///d:/_sandbox/research/eco_drive_cycles/notes/designs/archive/refactor_v0.3.md) | v0.3 design doc (shipped). Authoritative reference for metadata schema, ingest/extract pipeline, OBDFile strictness. |
+| [microtrip_design_spec.md](file:///d:/_sandbox/research/eco_drive_cycles/notes/designs/archive/microtrip_design_spec.md) | Microtrip segmentation spec (shipped 2026-04-23). Two-stage design, Microtrip model, SegmentationConfig. |
+| [ingestion-preprocessing.rst](file:///d:/_sandbox/research/eco_drive_cycles/docs/source/theory/ingestion-preprocessing.rst) | Theory documentation explaining raw file parsing, validation, QA filtering, resampling, and Parquet metadata archiving. |
+| [microtrip-spec.rst](file:///d:/_sandbox/research/eco_drive_cycles/docs/source/theory/microtrip-spec.rst) | Theory documentation explaining what microtrips are in eco-driving, target configurations, data models, and the two-stage segmentation boundaries. |
+| [synthesis-algorithm.rst](file:///d:/_sandbox/research/eco_drive_cycles/docs/source/theory/synthesis-algorithm.rst) | Technical reference for the drive cycle synthesis algorithm, explaining state discretization, transition matrices, Frobenius representative distance, stochastic selection, and comparing WLTP vs. generic clustering assignment. |
+| [TODOS.md](file:///d:/_sandbox/research/eco_drive_cycles/TODOS.md) | Prioritised backlog |
+| [DATA.md](file:///d:/_sandbox/research/eco_drive_cycles/DATA.md) | Data collection notes and Google Drive link |

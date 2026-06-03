@@ -54,3 +54,15 @@ def raw_xlsx(tmp_path):
         make_raw_obd_df(n=n, speed_kmh=speed_kmh).to_excel(path, index=False)
         return path
     return _write
+
+
+@pytest.fixture
+def project_dir(tmp_path, archive_parquet):
+    """Fixture that creates the full project directory layout with a few synthetic trips."""
+    from drive_cycle_calculator.cli._layout import _project_layout
+    layout = _project_layout(tmp_path)
+    # Write a few synthetic trips into layout.trips
+    archive_parquet(layout.trips / "trip1.parquet", speed_kmh=30.0, n=20)
+    archive_parquet(layout.trips / "trip2.parquet", speed_kmh=50.0, n=20)
+    return tmp_path
+

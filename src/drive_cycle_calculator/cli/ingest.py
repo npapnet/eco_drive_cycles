@@ -13,16 +13,19 @@ app = typer.Typer(help="Ingest raw OBD files into v2 archive Parquets (no DuckDB
 
 @app.callback(invoke_without_command=True)
 def ingest(
-    raw_dir: Path = typer.Argument(
+    first_arg: Path = typer.Argument(
         ...,
-        help="Directory containing raw OBD exports (.xlsx or .csv).",
+        help=(
+            "Project directory (single-arg mode: reads raw/, writes trips/) "
+            "or raw OBD directory (two-arg mode)."
+        ),
         exists=True,
         file_okay=False,
         dir_okay=True,
     ),
-    out_dir: Path = typer.Argument(
-        ...,
-        help="Directory to write archive Parquets into (<out_dir>/trips/).",
+    out_dir: Optional[Path] = typer.Argument(
+        None,
+        help="Output directory (two-arg backward-compat mode only).",
         file_okay=False,
     ),
     format: str = typer.Option(
@@ -44,9 +47,43 @@ def ingest(
         "--force",
         help="Overwrite existing archive Parquets. Default: skip files that already exist.",
     ),
+    max_gap_s: float = typer.Option(
+        5.0,
+        "--max-gap-s",
+        help="Maximum allowable time gap in seconds. Gaps above this threshold trigger a warning.",
+    ),
+    strict_gaps: bool = typer.Option(
+        False,
+        "--strict-gaps",
+        help="Skip files with any time gap exceeding --max-gap-s (instead of just warning).",
+    ),
+    no_resample: bool = typer.Option(
+        False,
+        "--no-resample",
+        help="Disable 1 Hz resampling. Archive will contain raw timestamps.",
+    ),
 ) -> None:
-    archive_dir = out_dir / "trips"
-    archive_dir.mkdir(parents=True, exist_ok=True)
+    if out_dir is None:
+        # Single-arg project-dir mode
+        from drive_cycle_calculator.cli._layout import _project_layout
+
+        project_dir = first_arg
+        raw_subdir = project_dir / "raw"
+        if not raw_subdir.is_dir():
+            typer.secho(
+                f"No raw/ subfolder found under {project_dir}. "
+                "Create raw/ and place your OBD export files there first.",
+                fg=typer.colors.RED,
+            )
+            raise typer.Exit(code=1)
+        layout = _project_layout(project_dir)
+        raw_dir = layout.raw
+        archive_dir = layout.trips
+    else:
+        # Two-arg backward-compat mode
+        raw_dir = first_arg
+        archive_dir = out_dir / "trips"
+        archive_dir.mkdir(parents=True, exist_ok=True)
 
     # ── Discover metadata-<folder>.yaml ──────────────────────────────────────
     yaml_files = sorted(raw_dir.glob("metadata-*.yaml"))
@@ -56,10 +93,8 @@ def ingest(
 
     if len(yaml_files) == 1:
         raw_yaml = yaml.safe_load(yaml_files[0].read_text(encoding="utf-8")) or {}
-        # Pull ingest-only settings before passing to UserMetadata
         yaml_sep = raw_yaml.pop("sep", None)
         yaml_decimal = raw_yaml.pop("decimal", None)
-        # Drop null-valued keys so Pydantic defaults (None) take effect
         user_fields = {k: v for k, v in raw_yaml.items() if v is not None}
         try:
             user_metadata = UserMetadata.model_validate(user_fields)
@@ -105,7 +140,9 @@ def ingest(
         typer.echo(f"No {format!r} files found in {raw_dir} — nothing to ingest.")
         raise typer.Exit()
 
-    typer.echo(f"  Found {len(files)} raw file(s).")
+    resample = not no_resample
+    resample_label = "1 Hz resampling" if resample else "raw timestamps (no resample)"
+    typer.echo(f"  Found {len(files)} raw file(s). Mode: {resample_label}, max_gap_s={max_gap_s}")
 
     ok = skipped = collisions = 0
     for f in sorted(files):
@@ -127,7 +164,19 @@ def ingest(
                 continue
             typer.secho(f"  OVERWRITE {dest.name}", fg=typer.colors.YELLOW)
 
-        obd.to_parquet(dest, user_metadata=user_metadata)
+        try:
+            obd.to_parquet(
+                dest,
+                user_metadata=user_metadata,
+                resample=resample,
+                max_gap_s=max_gap_s,
+                strict_gaps=strict_gaps,
+            )
+        except ValueError as exc:
+            typer.secho(f"  SKIPPED {f.name}: {exc}", fg=typer.colors.RED)
+            skipped += 1
+            continue
+
         ok += 1
         typer.secho(f"  OK     {f.name} → {dest.name}", fg=typer.colors.GREEN)
 

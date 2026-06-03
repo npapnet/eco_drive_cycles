@@ -138,6 +138,64 @@ class OBDFile:
             )
             self._df = self._df[self._df["Speed (OBD)(km/h)"] <= OBD_MAX_THRESHOLD]
 
+    def _check_time_gaps(
+        self,
+        max_gap_s: float = 5.0,
+        strict: bool = False,
+    ) -> list[dict]:
+        """Scan GPS Time for gaps exceeding *max_gap_s*.
+
+        Parameters
+        ----------
+        max_gap_s : float
+            Threshold in seconds. Gaps above this value are reported.
+        strict : bool
+            If True, raise ``ValueError`` when any gap exceeds the threshold.
+            Otherwise log a warning per gap.
+
+        Returns
+        -------
+        list[dict]
+            Each dict: ``{"index": int, "gap_s": float, "timestamp": Timestamp}``.
+        """
+        if "GPS Time" not in self._df.columns:
+            return []
+
+        gps_col = self._df["GPS Time"]
+        if not pd.api.types.is_datetime64_any_dtype(gps_col):
+            parser = GpsTimeParser()
+            gps_col = parser.to_datetime(gps_col)
+
+        valid = gps_col.dropna()
+        if len(valid) < 2:
+            return []
+
+        dt_seconds = valid.diff().dt.total_seconds()
+        big_gaps = dt_seconds[dt_seconds > max_gap_s]
+
+        descriptors: list[dict] = []
+        for idx, gap_s in big_gaps.items():
+            descriptors.append(
+                {"index": int(idx), "gap_s": float(gap_s), "timestamp": valid.loc[idx]}
+            )
+
+        if descriptors:
+            summary = "; ".join(f"row {d['index']}: {d['gap_s']:.1f}s" for d in descriptors)
+            if strict:
+                raise ValueError(
+                    f"{self.name}: {len(descriptors)} gap(s) exceed "
+                    f"{max_gap_s}s threshold — {summary}"
+                )
+            logger.warning(
+                "%s: %d gap(s) exceed %.1fs threshold — %s",
+                self.name,
+                len(descriptors),
+                max_gap_s,
+                summary,
+            )
+
+        return descriptors
+
     def _compute_parquet_id(self) -> str:
         """6-char hex hash of GPS lat+lon bytes, or name-hash fallback."""
         if "Latitude" in self._df.columns and "Longitude" in self._df.columns:
@@ -145,6 +203,104 @@ class OBDFile:
             lon_bytes = self._df["Longitude"].values.tobytes()
             return hashlib.sha256(lat_bytes + lon_bytes).hexdigest()[:6]
         return hashlib.sha256(self.name.encode()).hexdigest()[:6]
+
+    def _resample_to_1hz(self) -> pd.DataFrame:
+        """Resample the raw DataFrame to a uniform 1 Hz time grid.
+
+        Handles both upsampling (gaps / jitter) and downsampling (>1 Hz):
+
+        - **Downsampling** (median Δt < 0.5 s): numeric columns are mean-aggregated
+          per 1 s bin; non-numeric columns take the first value per bin.
+        - **Upsampling** (median Δt ≥ 0.5 s): a uniform 1 s DatetimeIndex is created
+          and numeric columns are linearly interpolated; non-numeric columns are
+          forward-filled.
+
+        Returns a *new* DataFrame — ``self._df`` is never mutated.
+        """
+        if "GPS Time" not in self._df.columns:
+            logger.warning("%s: no GPS Time column — skipping resample.", self.name)
+            return self._df.copy()
+
+        df = self._df.copy()
+        gps_col = df["GPS Time"]
+        if not pd.api.types.is_datetime64_any_dtype(gps_col):
+            parser = GpsTimeParser()
+            df["GPS Time"] = parser.to_datetime(gps_col)
+
+        # Drop rows where GPS Time is NaT
+        nat_count = df["GPS Time"].isna().sum()
+        if nat_count:
+            logger.info(
+                "%s: dropping %d rows with NaT GPS Time before resample.", self.name, nat_count
+            )
+            df = df.dropna(subset=["GPS Time"])
+
+        if len(df) < 2:
+            return df
+
+        # Drop duplicate timestamps
+        dup_count = df.duplicated(subset=["GPS Time"]).sum()
+        if dup_count:
+            logger.info("%s: dropping %d duplicate timestamps.", self.name, dup_count)
+            df = df.drop_duplicates(subset=["GPS Time"], keep="first")
+
+        # Sort by GPS Time to guarantee monotonic index
+        df = df.sort_values("GPS Time").reset_index(drop=True)
+
+        # Classify columns
+        numeric_cols = [
+            c for c in df.columns if c != "GPS Time" and pd.api.types.is_numeric_dtype(df[c])
+        ]
+        non_numeric_cols = [
+            c for c in df.columns if c != "GPS Time" and not pd.api.types.is_numeric_dtype(df[c])
+        ]
+
+        # Detect source rate
+        dt_series = df["GPS Time"].diff().dt.total_seconds().dropna()
+        median_dt = float(dt_series.median()) if not dt_series.empty else 1.0
+
+        df = df.set_index("GPS Time")
+
+        if median_dt < 0.5:
+            # ── Downsampling: aggregate to 1 s bins ─────────────────────────
+            # Genuine oversampling (e.g. 5 Hz → median_dt ≈ 0.2 s).
+            # Data with ~1 Hz jitter (median_dt ≈ 0.8–1.1) falls through
+            # to the upsampling branch instead.
+            logger.info(
+                "%s: median Δt=%.2fs — downsampling to 1 Hz via mean aggregation.",
+                self.name,
+                median_dt,
+            )
+            agg_rules: dict = {}
+            for c in numeric_cols:
+                agg_rules[c] = "mean"
+            for c in non_numeric_cols:
+                agg_rules[c] = "first"
+            resampled = df.resample("1s").agg(agg_rules)
+            # Drop bins that had no data at all
+            resampled = resampled.dropna(how="all")
+        else:
+            # ── Upsampling: reindex to uniform 1 s grid ─────────────────────
+            start = df.index.min().floor("s")
+            end = df.index.max().ceil("s")
+            uniform_index = pd.date_range(start=start, end=end, freq="1s", tz=df.index.tz)
+
+            resampled = df.reindex(uniform_index)
+
+            # Interpolate numeric columns
+            if numeric_cols:
+                resampled[numeric_cols] = resampled[numeric_cols].interpolate(
+                    method="linear", limit_direction="forward"
+                )
+            # Forward-fill non-numeric columns
+            if non_numeric_cols:
+                resampled[non_numeric_cols] = resampled[non_numeric_cols].ffill()
+
+        # Restore GPS Time as a column
+        resampled = resampled.reset_index()
+        resampled = resampled.rename(columns={resampled.columns[0]: "GPS Time"})
+
+        return resampled
 
     def _compute_gps_stats(self) -> "ComputedTripStats":
         """Compute ComputedTripStats from raw GPS columns."""
@@ -264,6 +420,10 @@ class OBDFile:
         path: str | Path,
         user_metadata: "UserMetadata | None" = None,
         use_dictionary: Union[bool, list[str]] = False,
+        *,  # the following args are keyword-only
+        resample: bool = True,
+        max_gap_s: float = 5.0,
+        strict_gaps: bool = False,
     ) -> None:
         """Write the full archive to a Parquet file (v2 format) with embedded metadata.
 
@@ -275,8 +435,19 @@ class OBDFile:
             User-supplied metadata to embed. Defaults to empty UserMetadata (all None).
         use_dictionary : bool or list[str], optional
             Controls PyArrow dictionary encoding.
+        resample : bool
+            If True (default), resample to a uniform 1 Hz time grid before
+            writing. Set to False to archive raw timestamps.
+        max_gap_s : float
+            Maximum allowable gap in GPS Time (seconds). Gaps above this
+            threshold trigger a warning or error.
+        strict_gaps : bool
+            If True, raise ``ValueError`` for any gap exceeding *max_gap_s*
+            (the caller can catch to skip the file). If False (default),
+            log a warning and continue.
         """
         from drive_cycle_calculator.schema import (
+            IngestConfig,
             IngestProvenance,
             ParquetMetadata,
             UserMetadata as _UserMetadata,
@@ -288,11 +459,22 @@ class OBDFile:
         except ImportError:
             _sw_ver = "unknown"
 
+        # ── Gap check (before resample, on original timestamps) ──────────
+        self._check_time_gaps(max_gap_s=max_gap_s, strict=strict_gaps)
+
+        # ── Resample ─────────────────────────────────────────────────────
+        df_to_write = self._resample_to_1hz() if resample else self._df
+
         path = Path(path)
-        table = pa.Table.from_pandas(self._df)
+        table = pa.Table.from_pandas(df_to_write)
         existing_meta = table.schema.metadata or {}
 
         # Assemble ParquetMetadata
+        ingest_cfg = IngestConfig(
+            resample=resample,
+            max_gap_s=max_gap_s,
+            strict_gaps=strict_gaps,
+        )
         pq_meta = ParquetMetadata(
             schema_version="1.0",
             software_version=_sw_ver,
@@ -303,6 +485,7 @@ class OBDFile:
             ),
             computed_trip_stats=self._compute_gps_stats(),
             user_metadata=user_metadata if user_metadata is not None else _UserMetadata(),
+            ingest_config=ingest_cfg,
         )
 
         new_meta = {
@@ -416,14 +599,9 @@ class OBDFile:
             else:
                 dash_count[col] = 0
 
-        gps_gap_count = 0
-        if "GPS Time" in df.columns:
-            parser = GpsTimeParser()
-            elapsed = parser.to_duration_seconds(df["GPS Time"])
-            valid = elapsed.dropna()
-            if len(valid) > 1:
-                gaps = valid.diff().dropna()
-                gps_gap_count = int((gaps > 5).sum())
+        # Delegate gap detection to _check_time_gaps (DRY)
+        gap_descriptors = self._check_time_gaps(max_gap_s=5.0, strict=False)
+        gps_gap_count = len(gap_descriptors)
 
         speed_col = "Speed (OBD)(km/h)"
         if speed_col in df.columns:
